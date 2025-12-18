@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M5StickC — Dashboard Klimatyzacji</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="logo">
+                    <i class="fas fa-cloud-sun"></i>
+                    <span class="logo-text">GREE<span class="logo-accent">Cloud</span></span>
+                </div>
+                <h1 class="login-title">Dashboard Klimatyzacji</h1>
+                <p class="login-subtitle">Monitoruj jednostki wewnętrzne i zewnętrzne w czasie rzeczywistym</p>
+            </div>
+            
+            <div class="login-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-user-shield"></i> Logowanie</h2>
+                </div>
+                <div class="card-body">
+                    <div class="input-group">
+                        <label for="login"><i class="fas fa-user"></i> Nazwa użytkownika</label>
+                        <input type="text" id="login" placeholder="Wprowadź login" value="admin" autocomplete="username">
+                    </div>
+                    <div class="input-group">
+                        <label for="password"><i class="fas fa-key"></i> Hasło</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="password" placeholder="Wprowadź hasło" value="admin" autocomplete="current-password">
+                            <button type="button" class="password-toggle" id="loginTogglePw">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button id="btnLogin" class="btn-login">
+                        <i class="fas fa-sign-in-alt"></i> Zaloguj się
+                    </button>
+                    <div id="login-msg" class="error-message"></div>
+                    <div class="login-hint">
+                        <i class="fas fa-info-circle"></i> Dane demo: login: <strong>admin</strong>, hasło: <strong>admin</strong>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="login-footer">
+                <p class="footer-text">
+                    <i class="fas fa-microchip"></i> Kompatybilne z M5StickC • 
+                    <i class="fas fa-chart-line"></i> Monitoring w czasie rzeczywistym • 
+                    <i class="fas fa-mobile-alt"></i> Responsywny design
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App (hidden initially) -->
+    <div id="app" class="app-container" style="display: none;">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="app-logo">
+                    <i class="fas fa-snowflake"></i>
+                    <div class="logo-text">
+                        <span class="logo-main">M5StickC</span>
+                        <span class="logo-sub">Dashboard</span>
+                    </div>
+                </div>
+                <div class="connection-status" id="globalStatus">
+                    <div class="status-indicator disconnected"></div>
+                    <span class="status-text">Brak połączenia</span>
+                </div>
+            </div>
+            
+            <div class="sidebar-menu">
+                <button class="menu-item active" onclick="showTab('home')">
+                    <i class="fas fa-home"></i>
+                    <span class="menu-text">Dashboard</span>
+                </button>
+                <button class="menu-item" onclick="showTab('charts')">
+                    <i class="fas fa-chart-line"></i>
+                    <span class="menu-text">Wykresy</span>
+                </button>
+                <button class="menu-item" onclick="showTab('mqtt')">
+                    <i class="fas fa-wifi"></i>
+                    <span class="menu-text">MQTT</span>
+                </button>
+                <button class="menu-item" onclick="showTab('history')">
+                    <i class="fas fa-history"></i>
+                    <span class="menu-text">Historia</span>
+                </button>
+                <button class="menu-item" onclick="showTab('settings')">
+                    <i class="fas fa-cog"></i>
+                    <span class="menu-text">Ustawienia</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-footer">
+                <button class="btn-logout" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Wyloguj się</span>
+                </button>
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-details">
+                        <span class="user-name" id="userName">Administrator</span>
+                        <span class="user-role">Super Admin</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div class="header-left">
+                    <h1 class="page-title" id="pageTitle">Dashboard Systemu</h1>
+                    <div class="breadcrumbs">
+                        <span class="breadcrumb-item active">Dashboard</span>
+                        <i class="fas fa-chevron-right"></i>
+                        <span class="breadcrumb-item">Podgląd na żywo</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="time-display" id="currentTime">
+                        <i class="far fa-clock"></i>
+                        <span id="clock">00:00:00</span>
+                    </div>
+                    <button class="btn-refresh" id="refreshBtn">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Aktualizuj</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Tabs Content -->
+            <div class="content-wrapper">
+                <!-- Home Tab -->
+                <section id="home" class="tab-content active">
+                    <div class="dashboard-grid">
+                        <!-- ODU Section -->
+                        <div class="card odu-card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-snowflake"></i> Jednostka Zewnętrzna (ODU)</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="odu-grid" id="odu-tiles">
+                                    <!-- Tiles will be inserted here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- IDU Section -->
+                        <div class="card idu-card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-home"></i> Jednostka Wewnętrzna (IDU)</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="idu-grid" id="idu-tiles">
+                                    <!-- Tiles will be inserted here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Charts Tab -->
+                <section id="charts" class="tab-content">
+                    <div class="charts-header">
+                        <div class="header-left">
+                            <h2><i class="fas fa-chart-line"></i> Wykresy Historyczne</h2>
+                            <p class="section-description">Analiza trendów i wydajności systemu w czasie</p>
+                        </div>
+                        <div class="header-right">
+                            <div class="time-range-selector">
+                                <label for="rangeSelect"><i class="fas fa-calendar-alt"></i> Zakres czasu:</label>
+                                <select id="rangeSelect" class="range-select">
+                                    <option value="300">5 minut</option>
+                                    <option value="1800">30 minut</option>
+                                    <option value="3600" selected>1 godzina</option>
+                                    <option value="21600">6 godzin</option>
+                                    <option value="43200">12 godzin</option>
+                                    <option value="86400">24 godziny</option>
+                                </select>
+                            </div>
+                            <button class="btn-secondary" id="exportCharts">
+                                <i class="fas fa-download"></i> Eksportuj
+                            </button>
+                            <button class="btn-secondary" id="clearCharts">
+                                <i class="fas fa-trash-alt"></i> Wyczyść
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="charts-grid">
+                        <div class="chart-container large">
+                            <div class="chart-header">
+                                <h3><i class="fas fa-temperature-low"></i> Temperatury IDU</h3>
+                                <div class="chart-legend">
+                                    <span class="legend-item"><i class="fas fa-circle" style="color: #3b82f6;"></i> Pokój</span>
+                                    <span class="legend-item"><i class="fas fa-circle" style="color: #10b981;"></i> Rura</span>
+                                    <span class="legend-item"><i class="fas fa-circle" style="color: #f59e0b;"></i> Zadana</span>
+                                </div>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chartIndoor"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container large">
+                            <div class="chart-header">
+                                <h3><i class="fas fa-temperature-high"></i> Temperatury ODU</h3>
+                                <div class="chart-legend">
+                                    <span class="legend-item"><i class="fas fa-circle" style="color: #3b82f6;"></i> Moduł</span>
+                                    <span class="legend-item"><i class="fas fa-circle" style="color: #10b981;"></i> Zewnętrzna</span>
+                                    <span class="legend-item"><i class="fas fa-circle" style="color: #f59e0b;"></i> Wymiennik</span>
+                                    <span class="legend-item"><i class="fas fa-circle" style="color: #ef4444;"></i> Tłoczenie</span>
+                                </div>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chartOutdoor"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3><i class="fas fa-bolt"></i> Prąd Kompresora</h3>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chartCurrent"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3><i class="fas fa-tachometer-alt"></i> Częstotliwość</h3>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chartCompressor"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3><i class="fas fa-fan"></i> Wentylator ODU</h3>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chartFanRpm"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- MQTT Tab -->
+                <section id="mqtt" class="tab-content">
+                    <div class="mqtt-container">
+                        <div class="mqtt-header">
+                            <h2><i class="fas fa-wifi"></i> Konfiguracja Połączenia MQTT</h2>
+                            <p class="section-description">Skonfiguruj połączenie z brokerem MQTT do przesyłania danych z M5StickC</p>
+                        </div>
+                        
+                        <div class="mqtt-config-card">
+                            <div class="config-section">
+                                <h3><i class="fas fa-server"></i> Ustawienia Brokera</h3>
+                                <div class="form-group">
+                                    <label for="broker"><i class="fas fa-link"></i> Adres brokera (WSS)</label>
+                                    <input type="text" id="broker" 
+                                           value="wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt"
+                                           placeholder="wss://adres.brokera:8884/mqtt">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="mqttUser"><i class="fas fa-user"></i> Login</label>
+                                        <input type="text" id="mqttUser" value="pawel22224" placeholder="Wprowadź login">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="mqttPass"><i class="fas fa-key"></i> Hasło</label>
+                                        <div class="password-wrapper">
+                                            <input type="password" id="mqttPass" value="Klocek12" placeholder="Wprowadź hasło">
+                                            <button type="button" class="password-toggle" id="mqttTogglePw">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="config-section">
+                                <h3><i class="fas fa-sliders-h"></i> Opcje Połączenia</h3>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="clientId"><i class="fas fa-id-card"></i> ID Klienta</label>
+                                        <input type="text" id="clientId" value="M5StickC_Dashboard" placeholder="Unikalne ID klienta">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="keepAlive"><i class="fas fa-heartbeat"></i> Keep Alive (s)</label>
+                                        <input type="number" id="keepAlive" value="60" min="10" max="300">
+                                    </div>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" id="autoConnect" checked>
+                                    <label for="autoConnect">Automatyczne łączenie przy starcie</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" id="saveSettings" checked>
+                                    <label for="saveSettings">Zapisz ustawienia w localStorage</label>
+                                </div>
+                            </div>
+                            
+                            <div class="config-actions">
+                                <button class="btn-primary" id="btnConnect">
+                                    <i class="fas fa-plug"></i> Połącz z Brokerem
+                                </button>
+                                <button class="btn-secondary" id="btnDisconnect">
+                                    <i class="fas fa-plug"></i> Rozłącz
+                                </button>
+                                <button class="btn-secondary" id="btnTest">
+                                    <i class="fas fa-vial"></i> Wyślij Dane Testowe
+                                </button>
+                                <div class="status-display" id="mqttStatus">
+                                    <div class="status-indicator disconnected"></div>
+                                    <span class="status-text">Niepołączony</span>
+                                </div>
+                            </div>
+                            
+                            <div class="config-hint">
+                                <i class="fas fa-info-circle"></i> Ustawienia zapisują się automatycznie. Double-click przycisku "Połącz" aby zresetować do domyślnych.
+                            </div>
+                        </div>
+                        
+                        <div class="mqtt-monitor">
+                            <div class="monitor-header">
+                                <h3><i class="fas fa-broadcast-tower"></i> Monitor Wiadomości</h3>
+                                <div class="monitor-stats">
+                                    <span class="stat"><i class="fas fa-envelope"></i> Wiadomości: <strong id="messageCount">0</strong></span>
+                                    <span class="stat"><i class="fas fa-topic"></i> Tematy: <strong id="topicCount">0</strong></span>
+                                </div>
+                            </div>
+                            <div class="monitor-body">
+                                <div class="message-list" id="mqttMessages">
+                                    <div class="empty-messages">
+                                        <i class="fas fa-comment-slash"></i>
+                                        <p>Brak wiadomości. Połącz się z brokerem, aby zobaczyć dane.</p>
+                                    </div>
+                                </div>
+                                <div class="monitor-controls">
+                                    <button class="btn-secondary" id="clearMessages">
+                                        <i class="fas fa-trash-alt"></i> Wyczyść log
+                                    </button>
+                                    <button class="btn-secondary" id="pauseMessages">
+                                        <i class="fas fa-pause"></i> Wstrzymaj
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- History Tab -->
+                <section id="history" class="tab-content">
+                    <div class="history-header">
+                        <h2><i class="fas fa-history"></i> Historia Danych</h2>
+                        <p class="section-description">Przeglądaj historyczne dane z systemu klimatyzacji</p>
+                    </div>
+                    <div class="history-container">
+                        <div class="history-filters">
+                            <div class="filter-group">
+                                <label for="historyRange"><i class="fas fa-calendar"></i> Okres:</label>
+                                <select id="historyRange" class="filter-select">
+                                    <option value="1">Ostatnie 24 godziny</option>
+                                    <option value="7">Ostatnie 7 dni</option>
+                                    <option value="30">Ostatnie 30 dni</option>
+                                    <option value="90">Ostatnie 3 miesiące</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="historyType"><i class="fas fa-filter"></i> Typ danych:</label>
+                                <select id="historyType" class="filter-select">
+                                    <option value="all">Wszystkie dane</option>
+                                    <option value="temperature">Temperatury</option>
+                                    <option value="power">Pobór mocy</option>
+                                    <option value="events">Zdarzenia</option>
+                                </select>
+                            </div>
+                            <button class="btn-primary" id="loadHistory">
+                                <i class="fas fa-search"></i> Pobierz dane
+                            </button>
+                        </div>
+                        <div class="history-table-container">
+                            <table class="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data i czas</th>
+                                        <th>Temperatura pokojowa</th>
+                                        <th>Temperatura zewnętrzna</th>
+                                        <th>Pobór prądu</th>
+                                        <th>Tryb pracy</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody">
+                                    <!-- History data will be inserted here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings Tab -->
+                <section id="settings" class="tab-content">
+                    <div class="settings-header">
+                        <h2><i class="fas fa-cog"></i> Ustawienia Aplikacji</h2>
+                        <p class="section-description">Dostosuj wygląd i zachowanie dashboardu</p>
+                    </div>
+                    <div class="settings-container">
+                        <div class="settings-sidebar">
+                            <nav class="settings-nav">
+                                <button class="settings-nav-item active" data-tab="general">
+                                    <i class="fas fa-sliders-h"></i> Ogólne
+                                </button>
+                                <button class="settings-nav-item" data-tab="appearance">
+                                    <i class="fas fa-palette"></i> Wygląd
+                                </button>
+                                <button class="settings-nav-item" data-tab="data">
+                                    <i class="fas fa-database"></i> Dane
+                                </button>
+                                <button class="settings-nav-item" data-tab="about">
+                                    <i class="fas fa-info-circle"></i> O aplikacji
+                                </button>
+                            </nav>
+                        </div>
+                        <div class="settings-content">
+                            <!-- General Settings -->
+                            <div class="settings-tab active" id="settingsGeneral">
+                                <h3><i class="fas fa-sliders-h"></i> Ustawienia Ogólne</h3>
+                                <div class="settings-group">
+                                    <div class="setting-item">
+                                        <label for="autoRefresh">Automatyczna aktualizacja</label>
+                                        <select id="autoRefresh" class="setting-select">
+                                            <option value="5">Co 5 sekund</option>
+                                            <option value="10" selected>Co 10 sekund</option>
+                                            <option value="30">Co 30 sekund</option>
+                                            <option value="60">Co 1 minutę</option>
+                                            <option value="0">Wyłączone</option>
+                                        </select>
+                                    </div>
+                                    <div class="setting-item">
+                                        <label for="temperatureUnit">Jednostka temperatury</label>
+                                        <select id="temperatureUnit" class="setting-select">
+                                            <option value="celsius">°C (Celsjusz)</option>
+                                            <option value="fahrenheit">°F (Fahrenheit)</option>
+                                        </select>
+                                    </div>
+                                    <div class="setting-item">
+                                        <label for="timeFormat">Format czasu</label>
+                                        <select id="timeFormat" class="setting-select">
+                                            <option value="24">24-godzinny</option>
+                                            <option value="12">12-godzinny</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Appearance Settings -->
+                            <div class="settings-tab" id="settingsAppearance">
+                                <h3><i class="fas fa-palette"></i> Ustawienia Wyglądu</h3>
+                                <div class="settings-group">
+                                    <div class="setting-item">
+                                        <label for="themeSelect">Motyw kolorystyczny</label>
+                                        <select id="themeSelect" class="setting-select">
+                                            <option value="dark">Ciemny</option>
+                                            <option value="light">Jasny</option>
+                                            <option value="auto">Auto</option>
+                                        </select>
+                                    </div>
+                                    <div class="setting-item">
+                                        <label for="tileLayout">Układ kafli</label>
+                                        <select id="tileLayout" class="setting-select">
+                                            <option value="grid">Siatka</option>
+                                            <option value="list">Lista</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="settings-actions">
+                                    <button class="btn-primary" id="saveAppearance">
+                                        <i class="fas fa-save"></i> Zapisz zmiany
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- About Settings -->
+                            <div class="settings-tab" id="settingsAbout">
+                                <h3><i class="fas fa-info-circle"></i> O Aplikacji</h3>
+                                <div class="about-container">
+                                    <div class="about-logo">
+                                        <i class="fas fa-snowflake"></i>
+                                        <h4>M5StickC Dashboard</h4>
+                                    </div>
+                                    <div class="about-info">
+                                        <p><strong>Wersja:</strong> 2.0.0</p>
+                                        <p><strong>Autor:</strong> GREE Cloud Team</p>
+                                        <p><strong>Licencja:</strong> MIT</p>
+                                        <p><strong>Opis:</strong> Zaawansowany dashboard do monitorowania systemu klimatyzacji z M5StickC</p>
+                                    </div>
+                                    <div class="about-features">
+                                        <h5>Funkcje:</h5>
+                                        <ul>
+                                            <li>Monitorowanie w czasie rzeczywistym</li>
+                                            <li>Wykresy historyczne</li>
+                                            <li>Integracja MQTT</li>
+                                            <li>Responsywny design</li>
+                                            <li>Ciemny motyw</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
