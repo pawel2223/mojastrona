@@ -48,6 +48,8 @@ const maxMessages = 50;
 let autoRefreshInterval = null;
 let testDataInterval = null;
 let settingsChanged = false;
+let connectionDiagnostics = [];
+const maxDiagnostics = 50;
 
 // Inicjalizacja aplikacji
 document.addEventListener('DOMContentLoaded', function() {
@@ -136,7 +138,186 @@ function showApp() {
         initCharts();
         showTab('home');
         initializeTileValues();
+        createDiagnosticsSection();
+        addQuickConfigButtons();
     }, 100);
+}
+
+// Tworzenie sekcji diagnostycznej
+function createDiagnosticsSection() {
+    const mqttConfigCard = document.querySelector('.mqtt-config-card');
+    if (!mqttConfigCard) return;
+    
+    // Dodaj przyciski testowe
+    const configActions = document.querySelector('.config-actions');
+    if (configActions) {
+        const testButtons = document.createElement('div');
+        testButtons.className = 'config-test-buttons';
+        testButtons.innerHTML = `
+            <button class="btn-test-connection" id="testConnection">
+                <i class="fas fa-vial"></i> Testuj konfigurację
+            </button>
+            <button class="btn-test-connection" id="showDiagnostics">
+                <i class="fas fa-eye"></i> Pokaż diagnostykę
+            </button>
+        `;
+        configActions.appendChild(testButtons);
+    }
+    
+    // Dodaj sekcję diagnostyczną
+    const diagnosticsSection = document.createElement('div');
+    diagnosticsSection.className = 'connection-diagnostics';
+    diagnosticsSection.id = 'connectionDiagnostics';
+    diagnosticsSection.style.display = 'none';
+    diagnosticsSection.innerHTML = `
+        <div class="diagnostics-header">
+            <span class="diagnostics-title">Diagnostyka połączenia</span>
+            <button class="btn-test-connection" id="clearDiagnostics">
+                <i class="fas fa-trash-alt"></i> Wyczyść
+            </button>
+        </div>
+        <div class="diagnostics-content">
+            Rozpoczęcie diagnostyki...
+        </div>
+    `;
+    
+    mqttConfigCard.appendChild(diagnosticsSection);
+    
+    // Dodaj obsługę czyszczenia diagnostyki
+    setTimeout(() => {
+        const clearDiagnosticsBtn = document.getElementById('clearDiagnostics');
+        if (clearDiagnosticsBtn) {
+            clearDiagnosticsBtn.addEventListener('click', () => {
+                connectionDiagnostics = ['Diagnostyka wyczyszczona'];
+                updateDiagnosticsDisplay();
+            });
+        }
+    }, 100);
+}
+
+// Dodaj przyciski szybkiej konfiguracji
+function addQuickConfigButtons() {
+    const mqttConfigCard = document.querySelector('.mqtt-config-card .config-section:first-child');
+    if (!mqttConfigCard) return;
+    
+    const quickConfigDiv = document.createElement('div');
+    quickConfigDiv.className = 'quick-config';
+    quickConfigDiv.innerHTML = `
+        <div style="margin-top: var(--spacing-md);">
+            <label style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: var(--spacing-xs); display: block;">
+                <i class="fas fa-bolt"></i> Szybka konfiguracja:
+            </label>
+            <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap;">
+                <button class="btn-quick-config" data-type="hivemq">HiveMQ WSS</button>
+                <button class="btn-quick-config" data-type="hivemq_tls">HiveMQ TLS</button>
+                <button class="btn-quick-config" data-type="mosquitto">Mosquitto</button>
+                <button class="btn-quick-config" data-type="localhost">Localhost</button>
+            </div>
+        </div>
+    `;
+    
+    mqttConfigCard.appendChild(quickConfigDiv);
+    
+    // Dodaj obsługę przycisków
+    setTimeout(() => {
+        document.querySelectorAll('.btn-quick-config').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const type = this.getAttribute('data-type');
+                autoConfigureMQTT(type);
+            });
+        });
+    }, 100);
+}
+
+// Automatyczna konfiguracja MQTT
+function autoConfigureMQTT(brokerType) {
+    const brokerInput = document.getElementById('broker');
+    const portSelect = document.getElementById('port');
+    const protocolSelect = document.getElementById('protocol');
+    const useTLSCheckbox = document.getElementById('useTLS');
+    
+    if (!brokerInput || !portSelect || !protocolSelect) return;
+    
+    switch(brokerType) {
+        case 'hivemq':
+            brokerInput.value = 'wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt';
+            portSelect.value = '8884';
+            protocolSelect.value = 'wss';
+            if (useTLSCheckbox) useTLSCheckbox.checked = true;
+            addDiagnostic('Skonfigurowano dla HiveMQ Cloud (WSS)');
+            break;
+            
+        case 'hivemq_tls':
+            brokerInput.value = 'mqtts://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8883';
+            portSelect.value = '8883';
+            protocolSelect.value = 'mqtts';
+            if (useTLSCheckbox) useTLSCheckbox.checked = true;
+            addDiagnostic('Skonfigurowano dla HiveMQ Cloud (MQTTS)');
+            break;
+            
+        case 'mosquitto':
+            brokerInput.value = 'ws://test.mosquitto.org:8080';
+            portSelect.value = '8080';
+            protocolSelect.value = 'ws';
+            if (useTLSCheckbox) useTLSCheckbox.checked = false;
+            addDiagnostic('Skonfigurowano dla Mosquitto test server');
+            break;
+            
+        case 'mosquitto_tls':
+            brokerInput.value = 'wss://test.mosquitto.org:8081';
+            portSelect.value = '8081';
+            protocolSelect.value = 'wss';
+            if (useTLSCheckbox) useTLSCheckbox.checked = true;
+            addDiagnostic('Skonfigurowano dla Mosquitto test server (WSS)');
+            break;
+            
+        case 'localhost':
+            brokerInput.value = 'ws://localhost:9001';
+            portSelect.value = '9001';
+            protocolSelect.value = 'ws';
+            if (useTLSCheckbox) useTLSCheckbox.checked = false;
+            addDiagnostic('Skonfigurowano dla localhost (WebSocket)');
+            break;
+            
+        case 'localhost_tls':
+            brokerInput.value = 'wss://localhost:9443';
+            portSelect.value = '9443';
+            protocolSelect.value = 'wss';
+            if (useTLSCheckbox) useTLSCheckbox.checked = true;
+            addDiagnostic('Skonfigurowano dla localhost (WSS)');
+            break;
+    }
+}
+
+// Dodaj wpis diagnostyczny
+function addDiagnostic(message) {
+    const timestamp = new Date().toLocaleTimeString('pl-PL', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    
+    connectionDiagnostics.push(`[${timestamp}] ${message}`);
+    
+    // Ogranicz liczbę wpisów
+    if (connectionDiagnostics.length > maxDiagnostics) {
+        connectionDiagnostics.shift();
+    }
+    
+    // Aktualizuj UI jeśli jest dostępne
+    updateDiagnosticsDisplay();
+}
+
+// Aktualizuj wyświetlanie diagnostyki
+function updateDiagnosticsDisplay() {
+    const diagnosticsEl = document.getElementById('connectionDiagnostics');
+    if (diagnosticsEl) {
+        const contentEl = diagnosticsEl.querySelector('.diagnostics-content');
+        if (contentEl) {
+            contentEl.textContent = connectionDiagnostics.join('\n');
+            diagnosticsEl.scrollTop = diagnosticsEl.scrollHeight;
+        }
+    }
 }
 
 // Inicjalizuj wartości w kafelkach z domyślnymi danymi
@@ -507,11 +688,64 @@ function initEventListeners() {
             if (passwordInput.type === 'password') {
                 passwordInput.type = 'text';
                 icon.className = 'fas fa-eye-slash';
-                mqttToggle.title = 'Ukryj hasło';
             } else {
                 passwordInput.type = 'password';
                 icon.className = 'fas fa-eye';
-                mqttToggle.title = 'Pokaż hasło';
+            }
+        });
+    }
+    
+    // Przycisk testowania połączenia
+    const testConnectionBtn = document.getElementById('testConnection');
+    if (testConnectionBtn) {
+        testConnectionBtn.addEventListener('click', testMQTTConnection);
+    }
+    
+    // Przycisk diagnostyki
+    const showDiagnosticsBtn = document.getElementById('showDiagnostics');
+    if (showDiagnosticsBtn) {
+        showDiagnosticsBtn.addEventListener('click', function() {
+            const diagnosticsEl = document.getElementById('connectionDiagnostics');
+            if (diagnosticsEl) {
+                if (diagnosticsEl.style.display === 'none') {
+                    diagnosticsEl.style.display = 'block';
+                    this.innerHTML = '<i class="fas fa-eye-slash"></i> Ukryj diagnostykę';
+                } else {
+                    diagnosticsEl.style.display = 'none';
+                    this.innerHTML = '<i class="fas fa-eye"></i> Pokaż diagnostykę';
+                }
+            }
+        });
+    }
+    
+    // Automatyczna aktualizacja portu i protokołu
+    const portSelect = document.getElementById('port');
+    const protocolSelect = document.getElementById('protocol');
+    
+    if (portSelect && protocolSelect) {
+        portSelect.addEventListener('change', function() {
+            const port = this.value;
+            if (port === '8883') {
+                protocolSelect.value = 'mqtts';
+            } else if (port === '8884') {
+                protocolSelect.value = 'wss';
+            } else if (port === '8080') {
+                protocolSelect.value = 'ws';
+            } else if (port === '1883') {
+                protocolSelect.value = 'mqtt';
+            }
+        });
+        
+        protocolSelect.addEventListener('change', function() {
+            const protocol = this.value;
+            if (protocol === 'mqtts') {
+                portSelect.value = '8883';
+            } else if (protocol === 'wss') {
+                portSelect.value = '8884';
+            } else if (protocol === 'ws') {
+                portSelect.value = '8080';
+            } else if (protocol === 'mqtt') {
+                portSelect.value = '1883';
             }
         });
     }
@@ -573,12 +807,48 @@ function initAppearanceSettings() {
         appearanceSelects.forEach(select => {
             select.addEventListener('change', function() {
                 settingsChanged = true;
-                const saveBtn = document.getElementById('saveAppearance');
-                if (saveBtn) {
-                    saveBtn.style.display = 'block';
-                }
+                showSaveButton();
             });
         });
+    }
+}
+
+// Pokaz przycisk zapisu
+function showSaveButton() {
+    const saveBtn = document.getElementById('saveAppearance');
+    if (saveBtn) {
+        saveBtn.style.display = 'flex';
+    }
+}
+
+// Testowanie konfiguracji MQTT
+function testMQTTConnection() {
+    addDiagnostic('=== TEST POŁĄCZENIA ===');
+    addDiagnostic('Sprawdzanie konfiguracji...');
+    
+    const brokerInput = document.getElementById('broker');
+    const userInput = document.getElementById('mqttUser');
+    const passInput = document.getElementById('mqttPass');
+    
+    if (!brokerInput || !userInput || !passInput) {
+        addDiagnostic('BŁĄD: Brak pól konfiguracyjnych');
+        return;
+    }
+    
+    const broker = brokerInput.value.trim();
+    const user = userInput.value.trim();
+    const pass = passInput.value.trim();
+    
+    addDiagnostic(`Broker: ${broker}`);
+    addDiagnostic(`Użytkownik: ${user}`);
+    addDiagnostic(`Hasło: ${pass ? 'ustawione' : 'brak'}`);
+    
+    // Sprawdź czy URL jest poprawny
+    try {
+        new URL(broker);
+        addDiagnostic('✓ URL jest poprawny');
+    } catch (e) {
+        addDiagnostic(`✗ Niepoprawny URL: ${e.message}`);
     }
 }
 
@@ -751,16 +1021,27 @@ function loadSavedSettings() {
             const passInput = document.getElementById('mqttPass');
             const clientIdInput = document.getElementById('clientId');
             const keepAliveInput = document.getElementById('keepAlive');
+            const portSelect = document.getElementById('port');
+            const protocolSelect = document.getElementById('protocol');
+            const useTLSCheckbox = document.getElementById('useTLS');
             
             if (brokerInput) brokerInput.value = settings.broker || '';
             if (userInput) userInput.value = settings.user || '';
             if (passInput) passInput.value = settings.pass || '';
-            if (clientIdInput) clientIdInput.value = settings.clientId || 'M5StickC_Dashboard';
+            if (clientIdInput) clientIdInput.value = settings.clientId || `M5StickC_Dashboard_${Date.now()}`;
             if (keepAliveInput) keepAliveInput.value = settings.keepAlive || '60';
+            if (portSelect) portSelect.value = settings.port || '8884';
+            if (protocolSelect) protocolSelect.value = settings.protocol || 'wss';
+            if (useTLSCheckbox) useTLSCheckbox.checked = settings.useTLS !== false;
+            
+            addDiagnostic('Ustawienia załadowane z localStorage');
             
             const autoConnect = document.getElementById('autoConnect');
             if (autoConnect && autoConnect.checked && settings.broker && settings.user) {
-                setTimeout(() => connectMQTT(), 1000);
+                setTimeout(() => {
+                    addDiagnostic('Automatyczne łączenie...');
+                    connectMQTT();
+                }, 2000);
             }
         }
         
@@ -769,6 +1050,7 @@ function loadSavedSettings() {
         
     } catch (e) {
         console.error('Błąd ładowania ustawień:', e);
+        addDiagnostic(`Błąd ładowania ustawień: ${e.message}`);
     }
 }
 
@@ -780,6 +1062,9 @@ function saveSettings() {
         const passInput = document.getElementById('mqttPass');
         const clientIdInput = document.getElementById('clientId');
         const keepAliveInput = document.getElementById('keepAlive');
+        const portSelect = document.getElementById('port');
+        const protocolSelect = document.getElementById('protocol');
+        const useTLSCheckbox = document.getElementById('useTLS');
         
         if (!brokerInput || !userInput || !passInput) return;
         
@@ -788,12 +1073,19 @@ function saveSettings() {
             user: userInput.value,
             pass: passInput.value,
             clientId: clientIdInput ? clientIdInput.value : 'M5StickC_Dashboard',
-            keepAlive: keepAliveInput ? keepAliveInput.value : '60'
+            keepAlive: keepAliveInput ? keepAliveInput.value : '60',
+            port: portSelect ? portSelect.value : '8884',
+            protocol: protocolSelect ? protocolSelect.value : 'wss',
+            useTLS: useTLSCheckbox ? useTLSCheckbox.checked : true,
+            timestamp: new Date().toISOString()
         };
         
         localStorage.setItem('mqttSettings', JSON.stringify(settings));
+        addDiagnostic('Ustawienia zapisane do localStorage');
+        
     } catch (e) {
         console.error('Błąd zapisywania ustawień:', e);
+        addDiagnostic(`Błąd zapisywania ustawień: ${e.message}`);
     }
 }
 
@@ -807,12 +1099,18 @@ function resetMQTTSettings() {
         const passInput = document.getElementById('mqttPass');
         const clientIdInput = document.getElementById('clientId');
         const keepAliveInput = document.getElementById('keepAlive');
+        const portSelect = document.getElementById('port');
+        const protocolSelect = document.getElementById('protocol');
+        const useTLSCheckbox = document.getElementById('useTLS');
         
         if (brokerInput) brokerInput.value = 'wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt';
         if (userInput) userInput.value = 'pawel22224';
         if (passInput) passInput.value = 'Klocek12';
         if (clientIdInput) clientIdInput.value = 'M5StickC_Dashboard';
         if (keepAliveInput) keepAliveInput.value = '60';
+        if (portSelect) portSelect.value = '8884';
+        if (protocolSelect) protocolSelect.value = 'wss';
+        if (useTLSCheckbox) useTLSCheckbox.checked = true;
         
         showSaveMessage('Ustawienia MQTT zostały zresetowane!');
     }
@@ -825,17 +1123,45 @@ function connectMQTT() {
     const passInput = document.getElementById('mqttPass');
     const clientIdInput = document.getElementById('clientId');
     const keepAliveInput = document.getElementById('keepAlive');
+    const portSelect = document.getElementById('port');
+    const protocolSelect = document.getElementById('protocol');
+    const useTLSCheckbox = document.getElementById('useTLS');
     
     if (!brokerInput || !userInput || !passInput) {
         alert('Nie znaleziono pól konfiguracyjnych MQTT!');
         return;
     }
     
-    const broker = brokerInput.value.trim();
+    let broker = brokerInput.value.trim();
     const user = userInput.value.trim();
     const pass = passInput.value.trim();
-    const clientId = clientIdInput ? clientIdInput.value.trim() : 'M5StickC_Dashboard';
+    const clientId = clientIdInput ? clientIdInput.value.trim() : `M5StickC_Dashboard_${Date.now()}`;
     const keepAlive = keepAliveInput ? parseInt(keepAliveInput.value) : 60;
+    const port = portSelect ? portSelect.value : '8884';
+    const protocol = protocolSelect ? protocolSelect.value : 'wss';
+    const useTLS = useTLSCheckbox ? useTLSCheckbox.checked : true;
+    
+    // Wyczyść diagnostykę
+    connectionDiagnostics = [];
+    addDiagnostic('Rozpoczynanie połączenia...');
+    
+    // Jeśli broker nie zawiera protokołu, dodaj go
+    if (!broker.startsWith('ws://') && !broker.startsWith('wss://') && 
+        !broker.startsWith('mqtt://') && !broker.startsWith('mqtts://')) {
+        
+        // Usuń istniejący port jeśli jest w adresie
+        broker = broker.split(':')[0];
+        
+        // Utwórz pełny URL
+        if (protocol === 'wss' || protocol === 'mqtts') {
+            broker = `${protocol}://${broker}:${port}/mqtt`;
+        } else {
+            broker = `${protocol}://${broker}:${port}`;
+        }
+        
+        brokerInput.value = broker;
+        addDiagnostic(`Skonstruowano URL: ${broker}`);
+    }
     
     if (!broker) {
         alert('Proszę wprowadzić adres brokera MQTT!');
@@ -845,25 +1171,38 @@ function connectMQTT() {
     // Rozłącz istniejące połączenie
     if (mqttClient && mqttClient.connected) {
         try {
+            addDiagnostic('Rozłączanie istniejącego połączenia...');
             mqttClient.end();
         } catch (e) {
             console.log('Błąd rozłączania poprzedniego klienta:', e);
+            addDiagnostic(`Błąd rozłączania: ${e.message}`);
         }
     }
     
     updateMQTTStatus('Łączenie...', 'connecting');
     updateGlobalStatus('Łączenie...', 'connecting');
+    addDiagnostic(`Status: Łączenie z ${broker}`);
     
     try {
-        mqttClient = mqtt.connect(broker, {
+        const options = {
             username: user,
             password: pass,
             clientId: clientId,
             clean: true,
             reconnectPeriod: 5000,
-            connectTimeout: 5000,
-            keepalive: keepAlive
-        });
+            connectTimeout: 10000,
+            keepalive: keepAlive,
+            rejectUnauthorized: false // Pozwala na samopodpisane certyfikaty
+        };
+        
+        // Dodaj informacje diagnostyczne
+        addDiagnostic(`ID Klienta: ${clientId}`);
+        addDiagnostic(`Keep Alive: ${keepAlive}s`);
+        addDiagnostic(`Użytkownik: ${user}`);
+        addDiagnostic(`TLS: ${useTLS ? 'Tak' : 'Nie'}`);
+        
+        mqttClient = mqtt.connect(broker, options);
+        addDiagnostic('Klient MQTT utworzony, nawiązywanie połączenia...');
         
         setupMQTTListeners();
         saveSettings();
@@ -872,7 +1211,9 @@ function connectMQTT() {
         console.error('Błąd połączenia MQTT:', error);
         updateMQTTStatus('Błąd połączenia', 'disconnected');
         updateGlobalStatus('Błąd', 'disconnected');
-        addMessage('system', 'Błąd połączenia: ' + error.message);
+        addMessage('error', 'Błąd połączenia: ' + error.message);
+        addDiagnostic(`BŁĄD: ${error.message}`);
+        addDiagnostic(`Stack: ${error.stack}`);
     }
 }
 
@@ -882,6 +1223,7 @@ function setupMQTTListeners() {
     
     mqttClient.on('connect', () => {
         console.log('✅ Połączono z brokerem MQTT');
+        addDiagnostic('✅ Połączono z brokerem MQTT');
         updateMQTTStatus('Połączony', 'connected');
         updateGlobalStatus('Online', 'connected');
         addMessage('system', 'Połączono z brokerem MQTT');
@@ -891,10 +1233,12 @@ function setupMQTTListeners() {
             mqttClient.subscribe(topic, { qos: 0 }, (err) => {
                 if (!err) {
                     console.log(`Subskrybowano temat: ${topic}`);
+                    addDiagnostic(`✓ Subskrybowano: ${topic}`);
                     topicSet.add(topic);
                     updateTopicCount();
                 } else {
                     console.error('Błąd subskrypcji:', err);
+                    addDiagnostic(`✗ Błąd subskrypcji ${topic}: ${err.message}`);
                 }
             });
         });
@@ -914,10 +1258,16 @@ function setupMQTTListeners() {
         updateMessageCount();
         addMessage(topic, value);
         processMQTTMessage(topic, value);
+        
+        // Dodaj diagnostykę dla pierwszej wiadomości
+        if (messageCount === 1) {
+            addDiagnostic(`📨 Pierwsza wiadomość: ${topic} = ${value}`);
+        }
     });
     
     mqttClient.on('error', (err) => {
         console.error('❌ Błąd MQTT:', err);
+        addDiagnostic(`❌ Błąd MQTT: ${err.message}`);
         updateMQTTStatus('Błąd: ' + err.message, 'disconnected');
         updateGlobalStatus('Błąd', 'disconnected');
         addMessage('error', 'Błąd MQTT: ' + err.message);
@@ -925,6 +1275,7 @@ function setupMQTTListeners() {
     
     mqttClient.on('close', () => {
         console.log('🔌 Rozłączono z brokerem MQTT');
+        addDiagnostic('🔌 Rozłączono z brokerem MQTT');
         updateMQTTStatus('Rozłączony', 'disconnected');
         updateGlobalStatus('Offline', 'disconnected');
         addMessage('system', 'Rozłączono z brokerem MQTT');
@@ -936,8 +1287,21 @@ function setupMQTTListeners() {
     
     mqttClient.on('reconnect', () => {
         console.log('🔄 Ponowne łączenie...');
+        addDiagnostic('🔄 Ponowne łączenie...');
         updateMQTTStatus('Łączenie...', 'connecting');
         updateGlobalStatus('Łączenie...', 'connecting');
+    });
+    
+    mqttClient.on('offline', () => {
+        console.log('📴 Klient offline');
+        addDiagnostic('📴 Klient offline');
+        updateMQTTStatus('Offline', 'disconnected');
+        updateGlobalStatus('Offline', 'disconnected');
+    });
+    
+    mqttClient.on('end', () => {
+        console.log('🔚 Połączenie zakończone');
+        addDiagnostic('🔚 Połączenie zakończone');
     });
 }
 
@@ -1332,10 +1696,10 @@ style.textContent = `
 }
 
 .status-indicator.connecting {
-    animation: pulse 1.5s infinite;
+    animation: pulseStatus 1.5s infinite;
 }
 
-@keyframes pulse {
+@keyframes pulseStatus {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
