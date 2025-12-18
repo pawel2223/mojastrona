@@ -28,12 +28,12 @@
                 <div class="card-body">
                     <div class="input-group">
                         <label for="login"><i class="fas fa-user"></i> Nazwa użytkownika</label>
-                        <input type="text" id="login" placeholder="Wprowadź login" value="admin" autocomplete="username">
+                        <input type="text" id="login" placeholder="Wprowadź login" value="" autocomplete="username">
                     </div>
                     <div class="input-group">
                         <label for="password"><i class="fas fa-key"></i> Hasło</label>
                         <div class="password-wrapper">
-                            <input type="password" id="password" placeholder="Wprowadź hasło" value="admin" autocomplete="current-password">
+                            <input type="password" id="password" placeholder="Wprowadź hasło" value="" autocomplete="current-password">
                             <button type="button" class="password-toggle" id="loginTogglePw">
                                 <i class="fas fa-eye"></i>
                             </button>
@@ -44,7 +44,7 @@
                     </button>
                     <div id="login-msg" class="error-message"></div>
                     <div class="login-hint">
-                        <i class="fas fa-info-circle"></i> Dane demo: login: <strong>admin</strong>, hasło: <strong>admin</strong>
+                        <i class="fas fa-info-circle"></i> Podaj dane do logowania
                     </div>
                 </div>
             </div>
@@ -271,10 +271,13 @@
                             <div class="config-section">
                                 <h3><i class="fas fa-server"></i> Ustawienia Brokera</h3>
                                 <div class="form-group">
-                                    <label for="broker"><i class="fas fa-link"></i> Adres brokera (WSS)</label>
+                                    <label for="broker"><i class="fas fa-link"></i> Adres brokera</label>
                                     <input type="text" id="broker" 
                                            value="wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt"
-                                           placeholder="wss://adres.brokera:8884/mqtt">
+                                           placeholder="wss://adres.brokera:port/mqtt">
+                                    <div class="form-hint">
+                                        <i class="fas fa-info-circle"></i> Przykład: wss://broker:8884/mqtt lub mqtts://broker:8883
+                                    </div>
                                 </div>
                                 <div class="form-row">
                                     <div class="form-group">
@@ -291,6 +294,10 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="form-check">
+                                    <input type="checkbox" id="useTLS" checked>
+                                    <label for="useTLS">Użyj TLS/SSL</label>
+                                </div>
                             </div>
                             
                             <div class="config-section">
@@ -301,8 +308,30 @@
                                         <input type="text" id="clientId" value="M5StickC_Dashboard" placeholder="Unikalne ID klienta">
                                     </div>
                                     <div class="form-group">
+                                        <label for="port"><i class="fas fa-plug"></i> Port</label>
+                                        <select id="port" class="port-select">
+                                            <option value="8884">8884 (WSS)</option>
+                                            <option value="8883">8883 (MQTTS)</option>
+                                            <option value="443">443 (HTTPS)</option>
+                                            <option value="80">80 (HTTP)</option>
+                                            <option value="9001">9001 (WS)</option>
+                                            <option value="1883">1883 (MQTT)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
                                         <label for="keepAlive"><i class="fas fa-heartbeat"></i> Keep Alive (s)</label>
                                         <input type="number" id="keepAlive" value="60" min="10" max="300">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="protocol"><i class="fas fa-exchange-alt"></i> Protokół</label>
+                                        <select id="protocol" class="protocol-select">
+                                            <option value="wss">wss:// (WebSocket Secure)</option>
+                                            <option value="mqtts">mqtts:// (MQTT over TLS)</option>
+                                            <option value="ws">ws:// (WebSocket)</option>
+                                            <option value="mqtt">mqtt:// (MQTT)</option>
+                                        </select>
                                     </div>
                                 </div>
                                 <div class="form-check">
