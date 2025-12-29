@@ -43,13 +43,14 @@ let messageCount = 0;
 let topicSet = new Set();
 let isPaused = false;
 let lastValues = {};
-const maxChartPoints = 100;
+let maxChartPoints = 50; // Zmieniono na let
 const maxMessages = 50;
 let autoRefreshInterval = null;
 let testDataInterval = null;
 let settingsChanged = false;
 let connectionDiagnostics = [];
 const maxDiagnostics = 50;
+let lastUpdateTime = null;
 
 // Inicjalizacja aplikacji
 document.addEventListener('DOMContentLoaded', function() {
@@ -66,10 +67,16 @@ document.addEventListener('DOMContentLoaded', function() {
 function initLogin() {
     const btnLogin = document.getElementById('btnLogin');
     const loginToggle = document.getElementById('loginTogglePw');
+    const errorMsg = document.getElementById('login-msg');
     
     if (!btnLogin) {
         console.error('Nie znaleziono przycisku logowania!');
         return;
+    }
+    
+    // Ukryj komunikat błędu na starcie
+    if (errorMsg) {
+        errorMsg.style.display = 'none';
     }
     
     btnLogin.addEventListener('click', handleLogin);
@@ -109,11 +116,15 @@ function handleLogin() {
     
     // Prosta walidacja
     if (username === 'admin' && password === 'admin') {
-        if (errorMsg) errorMsg.textContent = '';
+        if (errorMsg) {
+            errorMsg.style.display = 'none';
+            errorMsg.textContent = '';
+        }
         showApp();
         loadSavedSettings();
     } else {
         if (errorMsg) {
+            errorMsg.style.display = 'block';
             errorMsg.textContent = 'Nieprawidłowy login lub hasło!';
             errorMsg.classList.remove('shake');
             void errorMsg.offsetWidth;
@@ -140,6 +151,7 @@ function showApp() {
         initializeTileValues();
         createDiagnosticsSection();
         addQuickConfigButtons();
+        addDebugButton();
     }, 100);
 }
 
@@ -159,6 +171,9 @@ function createDiagnosticsSection() {
             </button>
             <button class="btn-test-connection" id="showDiagnostics">
                 <i class="fas fa-eye"></i> Pokaż diagnostykę
+            </button>
+            <button class="btn-test-connection" id="resetSettings">
+                <i class="fas fa-redo-alt"></i> Resetuj ustawienia
             </button>
         `;
         configActions.appendChild(testButtons);
@@ -193,6 +208,43 @@ function createDiagnosticsSection() {
             });
         }
     }, 100);
+}
+
+// Dodaj przycisk debugowania
+function addDebugButton() {
+    const mqttConfigCard = document.querySelector('.mqtt-config-card');
+    if (mqttConfigCard) {
+        const debugBtn = document.createElement('button');
+        debugBtn.className = 'btn-test-connection';
+        debugBtn.id = 'debugCharts';
+        debugBtn.innerHTML = '<i class="fas fa-bug"></i> Debuguj wykresy';
+        debugBtn.addEventListener('click', debugCharts);
+        
+        const testButtons = document.querySelector('.config-test-buttons');
+        if (testButtons) {
+            testButtons.appendChild(debugBtn);
+        }
+    }
+}
+
+// Debugowanie wykresów
+function debugCharts() {
+    console.log('=== DEBUG WYKRESÓW ===');
+    console.log('Czas ostatniej aktualizacji:', lastUpdateTime);
+    Object.entries(charts).forEach(([name, chart]) => {
+        if (chart) {
+            console.log(`Wykres ${name}:`);
+            console.log(`  Etykiety: ${chart.data.labels.length}`);
+            console.log(`  Ostatnie 5 etykiet: ${chart.data.labels.slice(-5).join(', ')}`);
+            chart.data.datasets.forEach((dataset, index) => {
+                console.log(`  Dataset ${index} (${dataset.label}): ${dataset.data.length} punktów`);
+                console.log(`  Ostatnie 5 wartości: ${dataset.data.slice(-5)}`);
+            });
+        } else {
+            console.log(`Wykres ${name}: NIE ZAINICJALIZOWANY`);
+        }
+    });
+    console.log('=====================');
 }
 
 // Dodaj przyciski szybkiej konfiguracji
@@ -506,41 +558,82 @@ function updateTile(id, value) {
     console.log(`Zaktualizowano kafelek ${id}: ${value}`);
 }
 
-// Inicjalizacja wykresów
+// Inicjalizacja wykresów - POPRAWIONE
 function initCharts() {
     if (typeof Chart === 'undefined') {
         console.error('Chart.js nie jest dostępny!');
         return;
     }
     
-    const chartOptions = {
+    const commonChartOptions = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                labels: { color: '#94a3b8' }
+                display: false,
+                position: 'top',
+                labels: {
+                    color: '#94a3b8',
+                    font: { size: 11 },
+                    usePointStyle: true,
+                    boxWidth: 6,
+                    padding: 10
+                }
             },
             tooltip: {
                 mode: 'index',
                 intersect: false,
                 backgroundColor: 'rgba(15, 23, 42, 0.9)',
                 titleColor: '#f8fafc',
-                bodyColor: '#f8fafc'
+                bodyColor: '#f8fafc',
+                padding: 10,
+                cornerRadius: 6
             }
         },
         scales: {
             x: {
-                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                ticks: { color: '#94a3b8', maxTicksLimit: 8 }
+                grid: { 
+                    color: 'rgba(255, 255, 255, 0.05)',
+                    drawBorder: false
+                },
+                ticks: { 
+                    color: '#94a3b8', 
+                    maxTicksLimit: 8,
+                    font: { size: 10 }
+                },
+                border: { display: false },
+                reverse: false // WAŻNE: nowe dane po prawej stronie
             },
             y: {
-                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                ticks: { color: '#94a3b8' }
+                grid: { 
+                    color: 'rgba(255, 255, 255, 0.05)',
+                    drawBorder: false
+                },
+                ticks: { 
+                    color: '#94a3b8',
+                    font: { size: 10 }
+                },
+                beginAtZero: false,
+                border: { display: false }
             }
         },
-        animation: false,
         elements: {
-            point: { radius: 0, hoverRadius: 3 }
+            point: { 
+                radius: 0, 
+                hoverRadius: 4,
+                hoverBorderWidth: 2
+            },
+            line: {
+                tension: 0.4,
+                borderWidth: 2
+            }
+        },
+        interaction: {
+            intersect: false,
+            mode: 'index'
+        },
+        animation: {
+            duration: 0
         }
     };
     
@@ -553,12 +646,36 @@ function initCharts() {
                 data: {
                     labels: [],
                     datasets: [
-                        { label: 'Pokój', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 },
-                        { label: 'Rura', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 },
-                        { label: 'Zadana', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', fill: true, tension: 0.4 }
+                        { 
+                            label: 'Temperatura pokojowa', 
+                            data: [], 
+                            borderColor: '#3b82f6', 
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#3b82f6',
+                            tension: 0.4
+                        },
+                        { 
+                            label: 'Temperatura rury', 
+                            data: [], 
+                            borderColor: '#10b981', 
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#10b981',
+                            tension: 0.4
+                        },
+                        { 
+                            label: 'Temperatura zadana', 
+                            data: [], 
+                            borderColor: '#f59e0b', 
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#f59e0b',
+                            tension: 0.4
+                        }
                     ]
                 },
-                options: chartOptions
+                options: commonChartOptions
             });
         }
         
@@ -570,13 +687,45 @@ function initCharts() {
                 data: {
                     labels: [],
                     datasets: [
-                        { label: 'Moduł', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 },
-                        { label: 'Zewnętrzna', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 },
-                        { label: 'Wymiennik', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', fill: true, tension: 0.4 },
-                        { label: 'Tłoczenie', data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, tension: 0.4 }
+                        { 
+                            label: 'Temperatura modułu', 
+                            data: [], 
+                            borderColor: '#3b82f6', 
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#3b82f6',
+                            tension: 0.4
+                        },
+                        { 
+                            label: 'Temperatura zewnętrzna', 
+                            data: [], 
+                            borderColor: '#10b981', 
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#10b981',
+                            tension: 0.4
+                        },
+                        { 
+                            label: 'Temperatura wymiennika', 
+                            data: [], 
+                            borderColor: '#f59e0b', 
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#f59e0b',
+                            tension: 0.4
+                        },
+                        { 
+                            label: 'Temperatura tłoczenia', 
+                            data: [], 
+                            borderColor: '#ef4444', 
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#ef4444',
+                            tension: 0.4
+                        }
                     ]
                 },
-                options: chartOptions
+                options: commonChartOptions
             });
         }
         
@@ -588,10 +737,18 @@ function initCharts() {
                 data: {
                     labels: [],
                     datasets: [
-                        { label: 'Prąd [A]', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', fill: true, tension: 0.4 }
+                        { 
+                            label: 'Prąd kompresora [A]', 
+                            data: [], 
+                            borderColor: '#f59e0b', 
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#f59e0b',
+                            tension: 0.4
+                        }
                     ]
                 },
-                options: chartOptions
+                options: commonChartOptions
             });
         }
         
@@ -603,10 +760,18 @@ function initCharts() {
                 data: {
                     labels: [],
                     datasets: [
-                        { label: 'Częstotliwość [Hz]', data: [], borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 }
+                        { 
+                            label: 'Częstotliwość kompresora [Hz]', 
+                            data: [], 
+                            borderColor: '#8b5cf6', 
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#8b5cf6',
+                            tension: 0.4
+                        }
                     ]
                 },
-                options: chartOptions
+                options: commonChartOptions
             });
         }
         
@@ -618,47 +783,123 @@ function initCharts() {
                 data: {
                     labels: [],
                     datasets: [
-                        { label: 'Wentylator [rpm]', data: [], borderColor: '#06b6d4', backgroundColor: 'rgba(6, 182, 212, 0.1)', fill: true, tension: 0.4 }
+                        { 
+                            label: 'Prędkość wentylatora [rpm]', 
+                            data: [], 
+                            borderColor: '#06b6d4', 
+                            backgroundColor: 'rgba(6, 182, 212, 0.1)', 
+                            fill: true,
+                            pointBackgroundColor: '#06b6d4',
+                            tension: 0.4
+                        }
                     ]
                 },
-                options: chartOptions
+                options: commonChartOptions
             });
         }
         
         console.log('Wykresy zainicjalizowane pomyślnie');
+        
+        // Dodaj początkowe puste dane
+        initializeChartData();
         
     } catch (error) {
         console.error('Błąd inicjalizacji wykresów:', error);
     }
 }
 
-// Aktualizacja wykresu
-function updateChart(chart, value, datasetIndex = 0) {
-    if (!chart) return;
+// Inicjalizuj dane wykresów
+function initializeChartData() {
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'});
+    
+    // Inicjalizuj każdy wykres z pustymi danymi
+    Object.values(charts).forEach(chart => {
+        if (chart) {
+            // Dodaj początkową etykietę
+            chart.data.labels.push(timeLabel);
+            
+            // Dodaj początkową wartość (0) do każdego datasetu
+            chart.data.datasets.forEach(dataset => {
+                dataset.data.push(0);
+            });
+            
+            chart.update('none');
+        }
+    });
+}
+
+// Aktualizacja wykresu - POPRAWIONE
+function updateChart(chart, value, datasetIndex = null) {
+    if (!chart || !chart.data || !chart.data.datasets) {
+        console.warn('Próba aktualizacji nieistniejącego lub uszkodzonego wykresu');
+        return;
+    }
     
     const now = new Date();
     const timeLabel = now.toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'});
     const numValue = parseFloat(value);
     
-    if (isNaN(numValue)) return;
+    if (isNaN(numValue)) {
+        console.warn('Próba dodania nieprawidłowej wartości do wykresu:', value);
+        return;
+    }
     
-    // Dodaj nową etykietę i wartość
-    chart.data.labels.push(timeLabel);
+    // Sprawdź czy dataset istnieje
+    if (datasetIndex !== null && !chart.data.datasets[datasetIndex]) {
+        console.error('Dataset nie istnieje:', datasetIndex);
+        return;
+    }
     
-    if (!chart.data.datasets[datasetIndex]) return;
+    // Sprawdź czy ostatnia etykieta jest taka sama jak aktualna
+    const lastLabel = chart.data.labels.length > 0 ? chart.data.labels[chart.data.labels.length - 1] : null;
+    const isSameTime = lastLabel === timeLabel;
     
-    chart.data.datasets[datasetIndex].data.push(numValue);
+    if (!isSameTime) {
+        // Dodaj NOWĄ etykietę czasu
+        chart.data.labels.push(timeLabel);
+        
+        // Dodaj wartości do WSZYSTKICH datasetów
+        chart.data.datasets.forEach((dataset, index) => {
+            if (datasetIndex === null || index === datasetIndex) {
+                // Dodaj aktualną wartość dla tego datasetu
+                dataset.data.push(numValue);
+            } else {
+                // Dla innych datasetów, użyj ostatniej wartości lub 0
+                const lastValue = dataset.data.length > 0 ? dataset.data[dataset.data.length - 1] : 0;
+                dataset.data.push(lastValue);
+            }
+        });
+    } else {
+        // Aktualizuj tylko wartość w istniejącym czasie
+        if (datasetIndex !== null && chart.data.datasets[datasetIndex]) {
+            const dataIndex = chart.data.datasets[datasetIndex].data.length - 1;
+            if (dataIndex >= 0) {
+                chart.data.datasets[datasetIndex].data[dataIndex] = numValue;
+            }
+        }
+    }
     
-    // Ogranicz do maksymalnej liczby punktów
+    // Ogranicz do maksymalnej liczby punktów - USUŃ NAJSTARSZE
     if (chart.data.labels.length > maxChartPoints) {
+        // Usuń najstarszą etykietę
         chart.data.labels.shift();
+        
+        // Usuń najstarsze wartości ze wszystkich datasetów
         chart.data.datasets.forEach(dataset => {
-            if (dataset.data) dataset.data.shift();
+            if (dataset.data && dataset.data.length > 0) {
+                dataset.data.shift();
+            }
         });
     }
     
     // Aktualizuj wykres
-    chart.update('none');
+    try {
+        chart.update('none');
+        lastUpdateTime = timeLabel;
+    } catch (error) {
+        console.error('Błąd aktualizacji wykresu:', error);
+    }
 }
 
 // Inicjalizacja nasłuchiwania zdarzeń
@@ -677,6 +918,12 @@ function initEventListeners() {
     
     // Double-click do resetowania ustawień
     if (btnConnect) btnConnect.addEventListener('dblclick', resetMQTTSettings);
+    
+    // Dodaj obsługę przycisku resetu ustawień
+    const resetSettingsBtn = document.getElementById('resetSettings');
+    if (resetSettingsBtn) {
+        resetSettingsBtn.addEventListener('click', resetMQTTSettings);
+    }
     
     // Toggle hasła MQTT
     if (mqttToggle) {
@@ -716,6 +963,12 @@ function initEventListeners() {
                 }
             }
         });
+    }
+    
+    // Przycisk debugowania wykresów
+    const debugChartsBtn = document.getElementById('debugCharts');
+    if (debugChartsBtn) {
+        debugChartsBtn.addEventListener('click', debugCharts);
     }
     
     // Automatyczna aktualizacja portu i protokołu
@@ -773,6 +1026,22 @@ function initEventListeners() {
     const exportChartsBtn = document.getElementById('exportCharts');
     if (exportChartsBtn) exportChartsBtn.addEventListener('click', exportChartsData);
     
+    // Przycisk zastosuj dla zakresu czasu
+    const applyRangeBtn = document.getElementById('applyRangeBtn');
+    if (applyRangeBtn) {
+        applyRangeBtn.addEventListener('click', function() {
+            const rangeSelect = document.getElementById('rangeSelect');
+            if (rangeSelect) {
+                const intervalSeconds = parseInt(rangeSelect.value);
+                addMessage('system', `Zastosowano zakres czasu: ${getTimeRangeLabel(intervalSeconds)}`);
+                showSaveMessage(`Zakres czasu ustawiony na: ${getTimeRangeLabel(intervalSeconds)}`);
+                
+                // Aktualizuj maxChartPoints w zależności od zakresu
+                updateMaxChartPoints(intervalSeconds);
+            }
+        });
+    }
+    
     // Ustawienia
     document.querySelectorAll('.settings-nav-item').forEach(item => {
         item.addEventListener('click', function() {
@@ -791,6 +1060,36 @@ function initEventListeners() {
     }
     
     console.log('Wszystkie zdarzenia zarejestrowane');
+}
+
+// Aktualizuj maksymalną liczbę punktów w zależności od zakresu czasu
+function updateMaxChartPoints(seconds) {
+    if (seconds <= 300) { // 5 minut
+        maxChartPoints = 30;
+    } else if (seconds <= 1800) { // 30 minut
+        maxChartPoints = 60;
+    } else if (seconds <= 3600) { // 1 godzina
+        maxChartPoints = 60;
+    } else if (seconds <= 21600) { // 6 godzin
+        maxChartPoints = 72;
+    } else if (seconds <= 43200) { // 12 godzin
+        maxChartPoints = 72;
+    } else { // 24 godziny
+        maxChartPoints = 96;
+    }
+}
+
+// Funkcja pomocnicza do etykiety zakresu czasu
+function getTimeRangeLabel(seconds) {
+    const ranges = {
+        300: '5 minut',
+        1800: '30 minut',
+        3600: '1 godzina',
+        21600: '6 godzin',
+        43200: '12 godzin',
+        86400: '24 godziny'
+    };
+    return ranges[seconds] || 'Niezdefiniowany';
 }
 
 // Inicjalizacja ustawień wyglądu
@@ -1113,6 +1412,7 @@ function resetMQTTSettings() {
         if (useTLSCheckbox) useTLSCheckbox.checked = true;
         
         showSaveMessage('Ustawienia MQTT zostały zresetowane!');
+        addDiagnostic('Ustawienia MQTT zresetowane do wartości domyślnych');
     }
 }
 
@@ -1313,62 +1613,89 @@ function startTestDataSimulation() {
         if (mqttClient && mqttClient.connected) {
             sendTestData();
         }
-    }, 5000);
+    }, 3000); // Co 3 sekundy
 }
 
-// Przetwarzanie wiadomości MQTT
+// Przetwarzanie wiadomości MQTT - POPRAWIONE
 function processMQTTMessage(topic, value) {
     try {
-        if (topic === topics.temp_room) {
-            updateTile('temp_room', value);
-            if (charts.indoor) updateChart(charts.indoor, parseFloat(value), 0);
+        // Sprawdź czy wartość jest poprawna
+        if (!value || value.trim() === '') {
+            console.warn('Otrzymano pustą wartość dla tematu:', topic);
+            return;
         }
-        else if (topic === topics.temp_pipe) {
-            updateTile('temp_pipe', value);
-            if (charts.indoor) updateChart(charts.indoor, parseFloat(value), 1);
+        
+        // Mapowanie tematów do wykresów i datasetów
+        const chartMapping = {
+            [topics.temp_room]: { chart: 'indoor', dataset: 0, tile: 'temp_room' },
+            [topics.temp_pipe]: { chart: 'indoor', dataset: 1, tile: 'temp_pipe' },
+            [topics.temp_set]: { chart: 'indoor', dataset: 2, tile: 'temp_set' },
+            [topics.temp_module]: { chart: 'outdoor', dataset: 0, tile: 'temp_module' },
+            [topics.temp_outside]: { chart: 'outdoor', dataset: 1, tile: 'temp_outside' },
+            [topics.temp_exchanger]: { chart: 'outdoor', dataset: 2, tile: 'temp_exchanger' },
+            [topics.temp_discharge]: { chart: 'outdoor', dataset: 3, tile: 'temp_discharge' },
+            [topics.current_a]: { chart: 'current', dataset: 0, tile: 'current' },
+            [topics.compressor]: { chart: 'compressor', dataset: 0, tile: 'compressor' },
+            [topics.fan_rpm]: { chart: 'fan', dataset: 0, tile: 'fan_rpm' },
+            [topics.mode]: { chart: null, dataset: null, tile: 'mode' },
+            [topics.fan_text]: { chart: null, dataset: null, tile: 'fan_text' }
+        };
+        
+        const mapping = chartMapping[topic];
+        if (!mapping) {
+            console.warn('Nieznany temat:', topic);
+            return;
         }
-        else if (topic === topics.temp_set) {
-            updateTile('temp_set', value);
-            if (charts.indoor) updateChart(charts.indoor, parseFloat(value), 2);
+        
+        // Aktualizuj kafelek
+        updateTile(mapping.tile, value);
+        
+        // Aktualizuj wykres jeśli jest przypisany
+        if (mapping.chart && charts[mapping.chart]) {
+            updateChart(charts[mapping.chart], value, mapping.dataset);
         }
-        else if (topic === topics.temp_module) {
-            updateTile('temp_module', value);
-            if (charts.outdoor) updateChart(charts.outdoor, parseFloat(value), 0);
-        }
-        else if (topic === topics.temp_outside) {
-            updateTile('temp_outside', value);
-            if (charts.outdoor) updateChart(charts.outdoor, parseFloat(value), 1);
-        }
-        else if (topic === topics.temp_exchanger) {
-            updateTile('temp_exchanger', value);
-            if (charts.outdoor) updateChart(charts.outdoor, parseFloat(value), 2);
-        }
-        else if (topic === topics.temp_discharge) {
-            updateTile('temp_discharge', value);
-            if (charts.outdoor) updateChart(charts.outdoor, parseFloat(value), 3);
-        }
-        else if (topic === topics.current_a) {
-            updateTile('current', value);
-            if (charts.current) updateChart(charts.current, parseFloat(value));
-        }
-        else if (topic === topics.compressor) {
-            updateTile('compressor', value);
-            if (charts.compressor) updateChart(charts.compressor, parseFloat(value));
-        }
-        else if (topic === topics.fan_rpm) {
-            updateTile('fan_rpm', value);
-            if (charts.fan) updateChart(charts.fan, parseFloat(value));
-        }
-        else if (topic === topics.mode) {
-            updateTile('mode', value);
-        }
-        else if (topic === topics.fan_text) {
-            updateTile('fan_text', value);
-        }
+        
     } catch (error) {
         console.error('Błąd przetwarzania wiadomości:', error);
+        console.error('Temat:', topic);
+        console.error('Wartość:', value);
         addMessage('error', 'Błąd parsowania: ' + value);
     }
+}
+
+// Wyślij dane testowe - POPRAWIONE
+function sendTestData() {
+    if (!mqttClient || !mqttClient.connected) {
+        console.warn('Nie można wysłać danych testowych - brak połączenia MQTT');
+        return;
+    }
+    
+    const now = new Date();
+    const second = now.getSeconds();
+    
+    // Proste liniowe zmiany dla łatwiejszego debugowania
+    const baseValue = second;
+    
+    const testData = {
+        [topics.temp_room]: (20 + (baseValue % 5)).toFixed(1),
+        [topics.temp_pipe]: (18 + (baseValue % 4)).toFixed(1),
+        [topics.temp_set]: '22.0',
+        [topics.temp_outside]: (15 + (baseValue % 8)).toFixed(1),
+        [topics.compressor]: (40 + (baseValue % 15)).toString(),
+        [topics.fan_rpm]: (800 + (baseValue % 200)).toString(),
+        [topics.current_a]: (2.0 + (baseValue % 1.5)).toFixed(2),
+        [topics.temp_module]: (30 + (baseValue % 10)).toFixed(1),
+        [topics.temp_exchanger]: (35 + (baseValue % 12)).toFixed(1),
+        [topics.temp_discharge]: (50 + (baseValue % 15)).toFixed(1),
+        [topics.mode]: 'Auto',
+        [topics.fan_text]: 'Średni'
+    };
+    
+    Object.entries(testData).forEach(([topic, value]) => {
+        mqttClient.publish(topic, value);
+    });
+    
+    console.log('Wysłano dane testowe o', now.toLocaleTimeString());
 }
 
 // Rozłącz z brokerem MQTT
@@ -1379,39 +1706,6 @@ function disconnectMQTT() {
         updateGlobalStatus('Offline', 'disconnected');
         addMessage('system', 'Rozłączono ręcznie');
     }
-}
-
-// Wyślij dane testowe
-function sendTestData() {
-    if (!mqttClient || !mqttClient.connected) {
-        console.warn('Nie można wysłać danych testowych - brak połączenia MQTT');
-        return;
-    }
-    
-    const now = new Date();
-    const hour = now.getHours();
-    const isDaytime = hour >= 6 && hour < 22;
-    
-    const testData = {
-        [topics.temp_room]: (21 + Math.sin(now.getMinutes() / 30) * 1.5 + Math.random() * 0.5).toFixed(1),
-        [topics.temp_outside]: (isDaytime ? 18 : 12 + Math.random() * 3).toFixed(1),
-        [topics.compressor]: Math.floor(40 + Math.sin(now.getMinutes() / 15) * 10 + Math.random() * 5).toString(),
-        [topics.fan_rpm]: Math.floor(800 + Math.sin(now.getMinutes() / 20) * 200 + Math.random() * 50).toString(),
-        [topics.current_a]: (2.5 + Math.sin(now.getMinutes() / 30) * 0.8 + Math.random() * 0.2).toFixed(2),
-        [topics.temp_module]: (35 + Math.sin(now.getMinutes() / 25) * 5 + Math.random() * 2).toFixed(1),
-        [topics.temp_exchanger]: (40 + Math.sin(now.getMinutes() / 20) * 7 + Math.random() * 3).toFixed(1),
-        [topics.temp_discharge]: (55 + Math.sin(now.getMinutes() / 15) * 10 + Math.random() * 5).toFixed(1),
-        [topics.mode]: ['Chłodzenie', 'Ogrzewanie', 'Auto'][Math.floor(Math.random() * 3)],
-        [topics.fan_text]: ['Niski', 'Średni', 'Wysoki'][Math.floor(Math.random() * 3)],
-        [topics.temp_set]: (22 + Math.random() * 1).toFixed(1),
-        [topics.temp_pipe]: (18 + Math.sin(now.getMinutes() / 35) * 3 + Math.random() * 1).toFixed(1)
-    };
-    
-    Object.entries(testData).forEach(([topic, value]) => {
-        mqttClient.publish(topic, value);
-    });
-    
-    console.log('Wysłano dane testowe');
 }
 
 // Dodaj wiadomość do monitora
@@ -1643,8 +1937,12 @@ function showTab(tabId) {
         setTimeout(() => {
             Object.values(charts).forEach(chart => {
                 if (chart) {
-                    chart.resize();
-                    chart.update();
+                    try {
+                        chart.resize();
+                        chart.update();
+                    } catch (error) {
+                        console.error('Błąd aktualizacji wykresu:', error);
+                    }
                 }
             });
         }, 100);
