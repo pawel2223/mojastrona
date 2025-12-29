@@ -15,7 +15,7 @@
             <div class="login-header">
                 <div class="logo">
                     <i class="fas fa-cloud-sun"></i>
-                    <span class="logo-text">Klimatyzacji<span class="logo-accent">Cloud</span></span>
+                    <span class="logo-text">GREE<span class="logo-accent">Cloud</span></span>
                 </div>
                 <h1 class="login-title">Dashboard Klimatyzacji</h1>
                 <p class="login-subtitle">Monitoruj jednostki wewnętrzne i zewnętrzne w czasie rzeczywistym</p>
@@ -28,23 +28,24 @@
                 <div class="card-body">
                     <div class="input-group">
                         <label for="login"><i class="fas fa-user"></i> Nazwa użytkownika</label>
-                        <input type="text" id="login" placeholder="Wprowadź login" value="" autocomplete="username">
+                        <input type="text" id="login" placeholder="Wprowadź login" value="admin" autocomplete="username">
                     </div>
                     <div class="input-group">
                         <label for="password"><i class="fas fa-key"></i> Hasło</label>
                         <div class="password-wrapper">
-                            <input type="password" id="password" placeholder="Wprowadź hasło" value="" autocomplete="current-password">
+                            <input type="password" id="password" placeholder="Wprowadź hasło" value="admin" autocomplete="current-password">
                             <button type="button" class="password-toggle" id="loginTogglePw">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </div>
                     </div>
+                    <!-- Komunikat błędu - poprawione miejsce -->
                     <button id="btnLogin" class="btn-login">
                         <i class="fas fa-sign-in-alt"></i> Zaloguj się
                     </button>
-                    <div id="login-msg" class="error-message"></div>
+                    <div id="login-msg" class="error-message" style="display: none;"></div>
                     <div class="login-hint">
-                        <i class="fas fa-info-circle"></i> Podaj dane do logowania
+                        <i class="fas fa-info-circle"></i> Dane demo: login: <strong>podaj login</strong>, hasło: <strong>podaj hasło</strong>
                     </div>
                 </div>
             </div>
@@ -190,6 +191,9 @@
                                     <option value="43200">12 godzin</option>
                                     <option value="86400">24 godziny</option>
                                 </select>
+                                <button class="btn-primary" id="applyRangeBtn">
+                                    <i class="fas fa-check"></i> Zastosuj
+                                </button>
                             </div>
                             <button class="btn-secondary" id="exportCharts">
                                 <i class="fas fa-download"></i> Eksportuj
@@ -200,15 +204,23 @@
                         </div>
                     </div>
                     
+                    <!-- Globalna legenda - tylko jedna na stronie -->
+                    <div class="global-chart-legend">
+                        <h3><i class="fas fa-legend"></i> Legenda wykresów:</h3>
+                        <div class="legend-items">
+                            <span class="legend-item"><i class="fas fa-circle" style="color: #3b82f6;"></i> Temperatura pokojowa</span>
+                            <span class="legend-item"><i class="fas fa-circle" style="color: #10b981;"></i> Temperatura rury</span>
+                            <span class="legend-item"><i class="fas fa-circle" style="color: #f59e0b;"></i> Temperatura zadana</span>
+                            <span class="legend-item"><i class="fas fa-circle" style="color: #ef4444;"></i> Temperatura tłoczenia</span>
+                            <span class="legend-item"><i class="fas fa-circle" style="color: #8b5cf6;"></i> Temperatura modułu</span>
+                            <span class="legend-item"><i class="fas fa-circle" style="color: #06b6d4;"></i> Prędkość wentylatora</span>
+                        </div>
+                    </div>
+                    
                     <div class="charts-grid">
                         <div class="chart-container large">
                             <div class="chart-header">
                                 <h3><i class="fas fa-temperature-low"></i> Temperatury IDU</h3>
-                                <div class="chart-legend">
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #3b82f6;"></i> Pokój</span>
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #10b981;"></i> Rura</span>
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #f59e0b;"></i> Zadana</span>
-                                </div>
                             </div>
                             <div class="chart-wrapper">
                                 <canvas id="chartIndoor"></canvas>
@@ -218,12 +230,6 @@
                         <div class="chart-container large">
                             <div class="chart-header">
                                 <h3><i class="fas fa-temperature-high"></i> Temperatury ODU</h3>
-                                <div class="chart-legend">
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #3b82f6;"></i> Moduł</span>
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #10b981;"></i> Zewnętrzna</span>
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #f59e0b;"></i> Wymiennik</span>
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #ef4444;"></i> Tłoczenie</span>
-                                </div>
                             </div>
                             <div class="chart-wrapper">
                                 <canvas id="chartOutdoor"></canvas>
@@ -458,9 +464,6 @@
                                 <button class="settings-nav-item" data-tab="appearance">
                                     <i class="fas fa-palette"></i> Wygląd
                                 </button>
-                                <button class="settings-nav-item" data-tab="data">
-                                    <i class="fas fa-database"></i> Dane
-                                </button>
                                 <button class="settings-nav-item" data-tab="about">
                                     <i class="fas fa-info-circle"></i> O aplikacji
                                 </button>
@@ -535,7 +538,7 @@
                                     </div>
                                     <div class="about-info">
                                         <p><strong>Wersja:</strong> 2.0.0</p>
-                                        <p><strong>Autor:</strong> Klimatyzacja Cloud Team</p>
+                                        <p><strong>Autor:</strong> GREE Cloud Team</p>
                                         <p><strong>Licencja:</strong> MIT</p>
                                         <p><strong>Opis:</strong> Zaawansowany dashboard do monitorowania systemu klimatyzacji z M5StickC</p>
                                     </div>
