@@ -129,7 +129,7 @@ function handleLogin() {
     } else {
         if (errorMsg) {
             errorMsg.style.display = 'block';
-            errorMsg.textContent = 'Nieprawidłowy login lub hasło!;
+            errorMsg.textContent = 'Nieprawidłowy login lub hasło!';
         }
     }
 }
@@ -166,12 +166,12 @@ function autoConfigureMQTT(type) {
     const useTLS = document.getElementById('useTLS');
     if (!broker || !port || !protocol) return;
     if (type === 'hivemq') {
-        broker.value = 'wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt';
+        broker.value = '';
         port.value = '8884';
         protocol.value = 'wss';
         if (useTLS) useTLS.checked = true;
     } else if (type === 'hivemq_tls') {
-        broker.value = 'mqtts://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8883';
+        broker.value = '';
         port.value = '8883';
         protocol.value = 'mqtts';
         if (useTLS) useTLS.checked = true;
