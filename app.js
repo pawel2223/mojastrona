@@ -129,7 +129,7 @@ function handleLogin() {
     } else {
         if (errorMsg) {
             errorMsg.style.display = 'block';
-            errorMsg.textContent = 'Nieprawidłowy login lub hasło! (admin/admin)';
+            errorMsg.textContent = 'Nieprawidłowy login lub hasło!;
         }
     }
 }
