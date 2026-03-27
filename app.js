@@ -1,38 +1,38 @@
-// app.js - Dashboard M5StickC z MQTT i wykresami
+// app.js - Dashboard RAC Monitor z MQTT i wykresami
 
 // Tematy MQTT
 const topics = {
-    compressor: "m5stick/external/compressor",
-    fan_rpm: "m5stick/external/fan",
-    current_a: "m5stick/external/current",
-    temp_module: "m5stick/external/temp_module",
-    temp_outside: "m5stick/external/temp_outside",
-    temp_exchanger: "m5stick/external/temp_exchanger",
-    temp_discharge: "m5stick/external/temp_discharge",
-    mode: "m5stick/internal/mode",
-    fan_text: "m5stick/internal/fan",
-    temp_set: "m5stick/internal/temp_set",
-    temp_room: "m5stick/internal/temp_room",
-    temp_pipe: "m5stick/internal/temp_pipe"
+    compressor: "rac/external/compressor",
+    fan_rpm: "rac/external/fan_rpm",
+    current_a: "rac/external/current",
+    temp_module: "rac/external/temp_module",
+    temp_outside: "rac/external/temp_outside",
+    temp_exchanger: "rac/external/temp_exchanger",
+    temp_discharge: "rac/external/temp_discharge",
+    mode: "rac/internal/mode",
+    fan_speed: "rac/internal/fan_speed",
+    temp_set: "rac/internal/temp_set",
+    temp_room: "rac/internal/temp_room",
+    temp_pipe: "rac/internal/temp_pipe"
 };
 
-// Konfiguracja kafli z domyślnymi wartościami
+// Konfiguracja kafli
 const tilesConfig = {
     odu: [
-        {id: 'compressor', label: 'Kompresor', unit: 'Hz', icon: 'fa-tachometer-alt', color: '#3b82f6', defaultValue: '45'},
-        {id: 'fan_rpm', label: 'Wentylator ODU', unit: 'rpm', icon: 'fa-fan', color: '#10b981', defaultValue: '1200'},
-        {id: 'current', label: 'Prąd', unit: 'A', icon: 'fa-bolt', color: '#f59e0b', defaultValue: '3.2'},
-        {id: 'temp_module', label: 'Temp. modułu', unit: '°C', icon: 'fa-microchip', color: '#8b5cf6', defaultValue: '35.5'},
-        {id: 'temp_outside', label: 'Temp. zewnętrzna', unit: '°C', icon: 'fa-sun', color: '#f97316', defaultValue: '22.0'},
-        {id: 'temp_exchanger', label: 'Temp. wymiennika', unit: '°C', icon: 'fa-exchange-alt', color: '#06b6d4', defaultValue: '40.5'},
-        {id: 'temp_discharge', label: 'Temp. tłoczenia', unit: '°C', icon: 'fa-fire', color: '#ef4444', defaultValue: '55.0'}
+        {id: 'compressor', label: 'Kompresor', unit: 'Hz', icon: 'fa-tachometer-alt', color: '#8b5cf6', defaultValue: '0'},
+        {id: 'fan_rpm', label: 'Wentylator ODU', unit: 'rpm', icon: 'fa-fan', color: '#06b6d4', defaultValue: '0'},
+        {id: 'current', label: 'Prąd', unit: 'A', icon: 'fa-bolt', color: '#f59e0b', defaultValue: '0'},
+        {id: 'temp_module', label: 'Temp. modułu', unit: '°C', icon: 'fa-microchip', color: '#8b5cf6', defaultValue: '0'},
+        {id: 'temp_outside', label: 'Temp. zewnętrzna', unit: '°C', icon: 'fa-sun', color: '#f97316', defaultValue: '0'},
+        {id: 'temp_exchanger', label: 'Temp. wymiennika', unit: '°C', icon: 'fa-exchange-alt', color: '#a855f7', defaultValue: '0'},
+        {id: 'temp_discharge', label: 'Temp. tłoczenia', unit: '°C', icon: 'fa-fire', color: '#ef4444', defaultValue: '0'}
     ],
     idu: [
-        {id: 'mode', label: 'Tryb pracy', unit: '', icon: 'fa-cogs', color: '#3b82f6', defaultValue: 'Auto'},
-        {id: 'fan_text', label: 'Wentylator IDU', unit: '', icon: 'fa-wind', color: '#10b981', defaultValue: 'Średni'},
-        {id: 'temp_set', label: 'Temp. zadana', unit: '°C', icon: 'fa-bullseye', color: '#8b5cf6', defaultValue: '22.0'},
-        {id: 'temp_room', label: 'Temp. pokojowa', unit: '°C', icon: 'fa-home', color: '#f59e0b', defaultValue: '21.5'},
-        {id: 'temp_pipe', label: 'Temp. rury', unit: '°C', icon: 'fa-water', color: '#06b6d4', defaultValue: '18.5'}
+        {id: 'mode', label: 'Tryb pracy', unit: '', icon: 'fa-cogs', color: '#3b82f6', defaultValue: '---'},
+        {id: 'fan_speed', label: 'Wentylator IDU', unit: '', icon: 'fa-wind', color: '#10b981', defaultValue: '---'},
+        {id: 'temp_set', label: 'Temp. zadana', unit: '°C', icon: 'fa-bullseye', color: '#f59e0b', defaultValue: '0'},
+        {id: 'temp_room', label: 'Temp. pokojowa', unit: '°C', icon: 'fa-home', color: '#3b82f6', defaultValue: '0'},
+        {id: 'temp_pipe', label: 'Temp. rury', unit: '°C', icon: 'fa-water', color: '#10b981', defaultValue: '0'}
     ]
 };
 
@@ -43,1999 +43,620 @@ let messageCount = 0;
 let topicSet = new Set();
 let isPaused = false;
 let lastValues = {};
-let maxChartPoints = 50; // Zmieniono na let
+let maxChartPoints = 60;
 const maxMessages = 50;
 let autoRefreshInterval = null;
-let testDataInterval = null;
-let settingsChanged = false;
-let connectionDiagnostics = [];
-const maxDiagnostics = 50;
 let lastUpdateTime = null;
+let historyData = [];
+const MAX_HISTORY = 500;
+let lastMqttMessageTime = 0;
+const MQTT_TIMEOUT = 30000;
 
-// Inicjalizacja aplikacji
+// Inicjalizacja
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Dashboard M5StickC - inicjalizacja...');
-    
-    // Inicjalizacja komponentów
     initLogin();
     initClock();
     initEventListeners();
     initAppearanceSettings();
+    loadHistoryFromStorage();
+    initResetButton();
+    startMqttWatchdog();
 });
 
-// Inicjalizacja logowania
+// Funkcja do resetu ESP32
+function resetESP32() {
+    if (mqttClient && mqttClient.connected) {
+        mqttClient.publish("rac/command/reset", "reset");
+        showSaveMessage('Wysłano komendę resetu przez MQTT!');
+        setTimeout(() => showSaveMessage('ESP32 powinien się zrestartować...'), 1000);
+    } else {
+        fetch('/reset', { method: 'GET' })
+            .then(() => showSaveMessage('Resetowanie ESP32 przez HTTP...'))
+            .catch(() => showSaveMessage('Nie można zresetować ESP32!', true));
+    }
+}
+
+// Watchdog dla MQTT
+function startMqttWatchdog() {
+    setInterval(() => {
+        if (mqttClient && mqttClient.connected) {
+            const now = Date.now();
+            if (lastMqttMessageTime > 0 && (now - lastMqttMessageTime) > MQTT_TIMEOUT) {
+                console.log('MQTT timeout - reconnecting...');
+                mqttClient.end();
+                connectMQTT();
+            }
+        }
+    }, 10000);
+}
+
+function initResetButton() {
+    const resetBtn = document.getElementById('resetEspBtn');
+    const modal = document.getElementById('resetModal');
+    const cancelBtn = document.getElementById('cancelReset');
+    const confirmBtn = document.getElementById('confirmReset');
+    
+    if (resetBtn) resetBtn.addEventListener('click', () => { if (modal) modal.style.display = 'flex'; });
+    if (cancelBtn) cancelBtn.addEventListener('click', () => { if (modal) modal.style.display = 'none'; });
+    if (confirmBtn) confirmBtn.addEventListener('click', () => { if (modal) modal.style.display = 'none'; resetESP32(); });
+    window.addEventListener('click', (e) => { if (modal && e.target === modal) modal.style.display = 'none'; });
+}
+
 function initLogin() {
     const btnLogin = document.getElementById('btnLogin');
     const loginToggle = document.getElementById('loginTogglePw');
     const errorMsg = document.getElementById('login-msg');
     
-    if (!btnLogin) {
-        console.error('Nie znaleziono przycisku logowania!');
-        return;
-    }
-    
-    // Ukryj komunikat błędu na starcie
-    if (errorMsg) {
-        errorMsg.style.display = 'none';
-    }
-    
-    btnLogin.addEventListener('click', handleLogin);
-    
+    if (btnLogin) btnLogin.addEventListener('click', handleLogin);
     if (loginToggle) {
-        loginToggle.addEventListener('click', function() {
-            const passwordInput = document.getElementById('password');
-            if (!passwordInput) return;
-            
-            const icon = loginToggle.querySelector('i');
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-            } else {
-                passwordInput.type = 'password';
-                icon.className = 'fas fa-eye';
-            }
+        loginToggle.addEventListener('click', () => {
+            const pw = document.getElementById('password');
+            if (pw) pw.type = pw.type === 'password' ? 'text' : 'password';
         });
     }
-    
-    // Pozwól na logowanie za pomocą Enter
-    const passwordInput = document.getElementById('password');
-    if (passwordInput) {
-        passwordInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                handleLogin();
-            }
-        });
-    }
+    document.getElementById('password')?.addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
 }
 
-// Obsługa logowania
 function handleLogin() {
-    const username = document.getElementById('login')?.value.trim() || '';
-    const password = document.getElementById('password')?.value.trim() || '';
+    const username = document.getElementById('login')?.value.trim();
+    const password = document.getElementById('password')?.value.trim();
     const errorMsg = document.getElementById('login-msg');
     
-    // Prosta walidacja
     if (username === 'admin' && password === 'admin') {
-        if (errorMsg) {
-            errorMsg.style.display = 'none';
-            errorMsg.textContent = '';
-        }
+        if (errorMsg) errorMsg.style.display = 'none';
         showApp();
         loadSavedSettings();
     } else {
         if (errorMsg) {
             errorMsg.style.display = 'block';
-            errorMsg.textContent = 'Nieprawidłowy login lub hasło!';
-            errorMsg.classList.remove('shake');
-            void errorMsg.offsetWidth;
-            errorMsg.classList.add('shake');
+            errorMsg.textContent = 'Nieprawidłowy login lub hasło! (admin/admin)';
         }
     }
 }
 
-// Pokazanie głównej aplikacji
 function showApp() {
-    const loginScreen = document.getElementById('login-screen');
-    const appScreen = document.getElementById('app');
-    
-    if (loginScreen) loginScreen.style.display = 'none';
-    if (appScreen) appScreen.style.display = 'flex';
-    
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
     updateGlobalStatus('Rozłączony', 'disconnected');
-    
-    // Inicjalizuj komponenty po załadowaniu aplikacji
     setTimeout(() => {
         buildTiles();
         initCharts();
         showTab('home');
         initializeTileValues();
-        createDiagnosticsSection();
         addQuickConfigButtons();
-        addDebugButton();
     }, 100);
 }
 
-// Tworzenie sekcji diagnostycznej
-function createDiagnosticsSection() {
-    const mqttConfigCard = document.querySelector('.mqtt-config-card');
-    if (!mqttConfigCard) return;
-    
-    // Dodaj przyciski testowe
-    const configActions = document.querySelector('.config-actions');
-    if (configActions) {
-        const testButtons = document.createElement('div');
-        testButtons.className = 'config-test-buttons';
-        testButtons.innerHTML = `
-            <button class="btn-test-connection" id="testConnection">
-                <i class="fas fa-vial"></i> Testuj konfigurację
-            </button>
-            <button class="btn-test-connection" id="showDiagnostics">
-                <i class="fas fa-eye"></i> Pokaż diagnostykę
-            </button>
-            <button class="btn-test-connection" id="resetSettings">
-                <i class="fas fa-redo-alt"></i> Resetuj ustawienia
-            </button>
-        `;
-        configActions.appendChild(testButtons);
-    }
-    
-    // Dodaj sekcję diagnostyczną
-    const diagnosticsSection = document.createElement('div');
-    diagnosticsSection.className = 'connection-diagnostics';
-    diagnosticsSection.id = 'connectionDiagnostics';
-    diagnosticsSection.style.display = 'none';
-    diagnosticsSection.innerHTML = `
-        <div class="diagnostics-header">
-            <span class="diagnostics-title">Diagnostyka połączenia</span>
-            <button class="btn-test-connection" id="clearDiagnostics">
-                <i class="fas fa-trash-alt"></i> Wyczyść
-            </button>
-        </div>
-        <div class="diagnostics-content">
-            Rozpoczęcie diagnostyki...
-        </div>
-    `;
-    
-    mqttConfigCard.appendChild(diagnosticsSection);
-    
-    // Dodaj obsługę czyszczenia diagnostyki
-    setTimeout(() => {
-        const clearDiagnosticsBtn = document.getElementById('clearDiagnostics');
-        if (clearDiagnosticsBtn) {
-            clearDiagnosticsBtn.addEventListener('click', () => {
-                connectionDiagnostics = ['Diagnostyka wyczyszczona'];
-                updateDiagnosticsDisplay();
-            });
-        }
-    }, 100);
-}
-
-// Dodaj przycisk debugowania
-function addDebugButton() {
-    const mqttConfigCard = document.querySelector('.mqtt-config-card');
-    if (mqttConfigCard) {
-        const debugBtn = document.createElement('button');
-        debugBtn.className = 'btn-test-connection';
-        debugBtn.id = 'debugCharts';
-        debugBtn.innerHTML = '<i class="fas fa-bug"></i> Debuguj wykresy';
-        debugBtn.addEventListener('click', debugCharts);
-        
-        const testButtons = document.querySelector('.config-test-buttons');
-        if (testButtons) {
-            testButtons.appendChild(debugBtn);
-        }
-    }
-}
-
-// Debugowanie wykresów
-function debugCharts() {
-    console.log('=== DEBUG WYKRESÓW ===');
-    console.log('Czas ostatniej aktualizacji:', lastUpdateTime);
-    Object.entries(charts).forEach(([name, chart]) => {
-        if (chart) {
-            console.log(`Wykres ${name}:`);
-            console.log(`  Etykiety: ${chart.data.labels.length}`);
-            console.log(`  Ostatnie 5 etykiet: ${chart.data.labels.slice(-5).join(', ')}`);
-            chart.data.datasets.forEach((dataset, index) => {
-                console.log(`  Dataset ${index} (${dataset.label}): ${dataset.data.length} punktów`);
-                console.log(`  Ostatnie 5 wartości: ${dataset.data.slice(-5)}`);
-            });
-        } else {
-            console.log(`Wykres ${name}: NIE ZAINICJALIZOWANY`);
-        }
-    });
-    console.log('=====================');
-}
-
-// Dodaj przyciski szybkiej konfiguracji
 function addQuickConfigButtons() {
-    const mqttConfigCard = document.querySelector('.mqtt-config-card .config-section:first-child');
-    if (!mqttConfigCard) return;
-    
-    const quickConfigDiv = document.createElement('div');
-    quickConfigDiv.className = 'quick-config';
-    quickConfigDiv.innerHTML = `
-        <div style="margin-top: var(--spacing-md);">
-            <label style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: var(--spacing-xs); display: block;">
-                <i class="fas fa-bolt"></i> Szybka konfiguracja:
-            </label>
-            <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap;">
-                <button class="btn-quick-config" data-type="hivemq">HiveMQ WSS</button>
-                <button class="btn-quick-config" data-type="hivemq_tls">HiveMQ TLS</button>
-                <button class="btn-quick-config" data-type="mosquitto">Mosquitto</button>
-                <button class="btn-quick-config" data-type="localhost">Localhost</button>
-            </div>
-        </div>
-    `;
-    
-    mqttConfigCard.appendChild(quickConfigDiv);
-    
-    // Dodaj obsługę przycisków
-    setTimeout(() => {
-        document.querySelectorAll('.btn-quick-config').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const type = this.getAttribute('data-type');
-                autoConfigureMQTT(type);
-            });
-        });
-    }, 100);
-}
-
-// Automatyczna konfiguracja MQTT
-function autoConfigureMQTT(brokerType) {
-    const brokerInput = document.getElementById('broker');
-    const portSelect = document.getElementById('port');
-    const protocolSelect = document.getElementById('protocol');
-    const useTLSCheckbox = document.getElementById('useTLS');
-    
-    if (!brokerInput || !portSelect || !protocolSelect) return;
-    
-    switch(brokerType) {
-        case 'hivemq':
-            brokerInput.value = 'wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt';
-            portSelect.value = '8884';
-            protocolSelect.value = 'wss';
-            if (useTLSCheckbox) useTLSCheckbox.checked = true;
-            addDiagnostic('Skonfigurowano dla HiveMQ Cloud (WSS)');
-            break;
-            
-        case 'hivemq_tls':
-            brokerInput.value = 'mqtts://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8883';
-            portSelect.value = '8883';
-            protocolSelect.value = 'mqtts';
-            if (useTLSCheckbox) useTLSCheckbox.checked = true;
-            addDiagnostic('Skonfigurowano dla HiveMQ Cloud (MQTTS)');
-            break;
-            
-        case 'mosquitto':
-            brokerInput.value = 'ws://test.mosquitto.org:8080';
-            portSelect.value = '8080';
-            protocolSelect.value = 'ws';
-            if (useTLSCheckbox) useTLSCheckbox.checked = false;
-            addDiagnostic('Skonfigurowano dla Mosquitto test server');
-            break;
-            
-        case 'mosquitto_tls':
-            brokerInput.value = 'wss://test.mosquitto.org:8081';
-            portSelect.value = '8081';
-            protocolSelect.value = 'wss';
-            if (useTLSCheckbox) useTLSCheckbox.checked = true;
-            addDiagnostic('Skonfigurowano dla Mosquitto test server (WSS)');
-            break;
-            
-        case 'localhost':
-            brokerInput.value = 'ws://localhost:9001';
-            portSelect.value = '9001';
-            protocolSelect.value = 'ws';
-            if (useTLSCheckbox) useTLSCheckbox.checked = false;
-            addDiagnostic('Skonfigurowano dla localhost (WebSocket)');
-            break;
-            
-        case 'localhost_tls':
-            brokerInput.value = 'wss://localhost:9443';
-            portSelect.value = '9443';
-            protocolSelect.value = 'wss';
-            if (useTLSCheckbox) useTLSCheckbox.checked = true;
-            addDiagnostic('Skonfigurowano dla localhost (WSS)');
-            break;
-    }
-}
-
-// Dodaj wpis diagnostyczny
-function addDiagnostic(message) {
-    const timestamp = new Date().toLocaleTimeString('pl-PL', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+    const container = document.querySelector('.mqtt-config-card .config-section:first-child');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'quick-config';
+    div.innerHTML = `<div style="margin-top:20px"><label style="font-size:0.8rem;color:var(--text-muted)">Szybka konfiguracja:</label><div style="display:flex;gap:8px;margin-top:8px"><button class="btn-quick-config" data-type="hivemq" style="padding:6px 12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;cursor:pointer">HiveMQ WSS</button><button class="btn-quick-config" data-type="hivemq_tls" style="padding:6px 12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;cursor:pointer">HiveMQ TLS</button><button class="btn-quick-config" data-type="mosquitto" style="padding:6px 12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;cursor:pointer">Mosquitto</button></div></div>`;
+    container.appendChild(div);
+    document.querySelectorAll('.btn-quick-config').forEach(btn => {
+        btn.addEventListener('click', () => autoConfigureMQTT(btn.dataset.type));
     });
-    
-    connectionDiagnostics.push(`[${timestamp}] ${message}`);
-    
-    // Ogranicz liczbę wpisów
-    if (connectionDiagnostics.length > maxDiagnostics) {
-        connectionDiagnostics.shift();
-    }
-    
-    // Aktualizuj UI jeśli jest dostępne
-    updateDiagnosticsDisplay();
 }
 
-// Aktualizuj wyświetlanie diagnostyki
-function updateDiagnosticsDisplay() {
-    const diagnosticsEl = document.getElementById('connectionDiagnostics');
-    if (diagnosticsEl) {
-        const contentEl = diagnosticsEl.querySelector('.diagnostics-content');
-        if (contentEl) {
-            contentEl.textContent = connectionDiagnostics.join('\n');
-            diagnosticsEl.scrollTop = diagnosticsEl.scrollHeight;
-        }
+function autoConfigureMQTT(type) {
+    const broker = document.getElementById('broker');
+    const port = document.getElementById('port');
+    const protocol = document.getElementById('protocol');
+    const useTLS = document.getElementById('useTLS');
+    if (!broker || !port || !protocol) return;
+    if (type === 'hivemq') {
+        broker.value = 'wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt';
+        port.value = '8884';
+        protocol.value = 'wss';
+        if (useTLS) useTLS.checked = true;
+    } else if (type === 'hivemq_tls') {
+        broker.value = 'mqtts://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8883';
+        port.value = '8883';
+        protocol.value = 'mqtts';
+        if (useTLS) useTLS.checked = true;
+    } else if (type === 'mosquitto') {
+        broker.value = 'ws://test.mosquitto.org:8080';
+        port.value = '8080';
+        protocol.value = 'ws';
+        if (useTLS) useTLS.checked = false;
     }
 }
 
-// Inicjalizuj wartości w kafelkach z domyślnymi danymi
 function initializeTileValues() {
-    [...tilesConfig.odu, ...tilesConfig.idu].forEach(tile => {
-        updateTile(tile.id, tile.defaultValue);
-    });
+    [...tilesConfig.odu, ...tilesConfig.idu].forEach(tile => updateTile(tile.id, tile.defaultValue));
 }
 
-// Wylogowanie
 function logout() {
-    // Zatrzymaj interwały
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    if (testDataInterval) clearInterval(testDataInterval);
-    
-    // Rozłącz MQTT
-    if (mqttClient && mqttClient.connected) {
-        try {
-            mqttClient.end();
-        } catch (e) {
-            console.error('Błąd podczas rozłączania MQTT:', e);
-        }
-    }
-    
-    // Resetuj aplikację
+    if (mqttClient && mqttClient.connected) mqttClient.end();
     resetApp();
-    
-    // Przełącz ekrany
-    const loginScreen = document.getElementById('login-screen');
-    const appScreen = document.getElementById('app');
-    
-    if (appScreen) appScreen.style.display = 'none';
-    if (loginScreen) loginScreen.style.display = 'flex';
-    
-    // Wyczyść formularz logowania
-    const passwordInput = document.getElementById('password');
-    if (passwordInput) passwordInput.value = 'admin';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('password').value = '';
 }
 
-// Reset aplikacji
 function resetApp() {
     messageCount = 0;
     topicSet.clear();
     lastValues = {};
     updateMessageCount();
     updateTopicCount();
-    
-    // Zresetuj wykresy
     Object.values(charts).forEach(chart => {
         if (chart) {
             chart.data.labels = [];
-            chart.data.datasets.forEach(dataset => dataset.data = []);
+            chart.data.datasets.forEach(ds => ds.data = []);
             chart.update();
         }
     });
-    
-    // Zresetuj kafelki
     [...tilesConfig.odu, ...tilesConfig.idu].forEach(tile => {
-        const valueEl = document.getElementById(`${tile.id}-value`);
-        const updatedEl = document.getElementById(`${tile.id}-updated`);
-        if (valueEl) valueEl.textContent = '--';
-        if (updatedEl) updatedEl.textContent = 'ostatnia: -';
+        const el = document.getElementById(`${tile.id}-value`);
+        if (el) el.textContent = '--';
     });
 }
 
-// Inicjalizacja zegara
 function initClock() {
-    function updateClock() {
-        const now = new Date();
-        const timeString = now.toLocaleTimeString('pl-PL', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-        const clockElement = document.getElementById('clock');
-        if (clockElement) {
-            clockElement.textContent = timeString;
-        }
-    }
-    
-    updateClock();
-    setInterval(updateClock, 1000);
+    const update = () => {
+        const el = document.getElementById('clock');
+        if (el) el.textContent = new Date().toLocaleTimeString('pl-PL');
+    };
+    update();
+    setInterval(update, 1000);
 }
 
-// Budowanie kafli
 function buildTiles() {
-    console.log('Budowanie kafelków...');
-    
-    // Kafelki ODU
-    const oduContainer = document.getElementById('odu-tiles');
-    if (oduContainer) {
-        oduContainer.innerHTML = '';
-        tilesConfig.odu.forEach(tile => {
-            oduContainer.appendChild(createTileElement(tile));
-        });
-    }
-    
-    // Kafelki IDU
-    const iduContainer = document.getElementById('idu-tiles');
-    if (iduContainer) {
-        iduContainer.innerHTML = '';
-        tilesConfig.idu.forEach(tile => {
-            iduContainer.appendChild(createTileElement(tile));
-        });
-    }
-    
-    console.log('Kafelki zbudowane pomyślnie');
+    const odu = document.getElementById('odu-tiles');
+    const idu = document.getElementById('idu-tiles');
+    if (odu) { odu.innerHTML = ''; tilesConfig.odu.forEach(t => odu.appendChild(createTileElement(t))); }
+    if (idu) { idu.innerHTML = ''; tilesConfig.idu.forEach(t => idu.appendChild(createTileElement(t))); }
 }
 
-// Tworzenie elementu kafelka
 function createTileElement(tile) {
-    const tileEl = document.createElement('div');
-    tileEl.className = 'tile';
-    tileEl.id = `tile-${tile.id}`;
-    tileEl.innerHTML = `
-        <div class="tile-header">
-            <div class="tile-label">
-                <i class="fas ${tile.icon}" style="color: ${tile.color}"></i>
-                ${tile.label}
-            </div>
-            <div class="tile-trend"></div>
-        </div>
-        <div class="tile-value" id="${tile.id}-value">${tile.defaultValue}</div>
-        <div class="tile-unit">${tile.unit}</div>
-        <div class="tile-footer">
-            <div class="tile-updated" id="${tile.id}-updated">ostatnia: -</div>
-        </div>
-    `;
-    return tileEl;
+    const div = document.createElement('div');
+    div.className = 'tile';
+    div.id = `tile-${tile.id}`;
+    div.innerHTML = `<div class="tile-header"><div class="tile-label"><i class="fas ${tile.icon}" style="color:${tile.color}"></i>${tile.label}</div><div class="tile-trend"></div></div><div class="tile-value" id="${tile.id}-value">${tile.defaultValue}</div><div class="tile-unit">${tile.unit}</div><div class="tile-footer"><div class="tile-updated" id="${tile.id}-updated">ostatnia: -</div></div>`;
+    return div;
 }
 
-// Aktualizacja kafelka
 function updateTile(id, value) {
     const valueEl = document.getElementById(`${id}-value`);
     const updatedEl = document.getElementById(`${id}-updated`);
-    const trendEl = document.querySelector(`#tile-${id} .tile-trend`);
     const tileEl = document.getElementById(`tile-${id}`);
-    
-    if (!valueEl || !updatedEl || !tileEl) {
-        console.warn(`Nie znaleziono elementów dla kafelka ${id}`);
-        return;
-    }
-    
-    const previousValue = parseFloat(valueEl.textContent);
-    const currentValue = parseFloat(value);
-    
-    // Aktualizacja wartości
+    if (!valueEl || !updatedEl || !tileEl) return;
+    const prev = parseFloat(valueEl.textContent);
+    const curr = parseFloat(value);
     valueEl.textContent = value;
-    
-    // Aktualizacja czasu
-    const now = new Date();
-    updatedEl.textContent = `aktualne: ${now.toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'})}`;
-    
-    // Aktualizacja trendu
-    if (trendEl) {
-        if (!isNaN(currentValue) && !isNaN(previousValue) && valueEl.textContent !== '--') {
-            const diff = currentValue - previousValue;
-            if (Math.abs(diff) > 0.01) {
-                trendEl.className = `tile-trend ${diff > 0 ? 'up' : 'down'}`;
-                trendEl.textContent = diff > 0 ? '↑' : '↓';
-                trendEl.title = `Zmiana: ${diff > 0 ? '+' : ''}${diff.toFixed(2)}`;
-            } else {
-                trendEl.className = '';
-                trendEl.textContent = '';
-                trendEl.title = '';
-            }
-        } else {
-            trendEl.className = '';
-            trendEl.textContent = '';
-            trendEl.title = '';
-        }
+    updatedEl.textContent = `aktualne: ${new Date().toLocaleTimeString('pl-PL', {hour:'2-digit', minute:'2-digit'})}`;
+    const trend = tileEl.querySelector('.tile-trend');
+    if (trend && !isNaN(curr) && !isNaN(prev) && valueEl.textContent !== '--') {
+        const diff = curr - prev;
+        if (Math.abs(diff) > 0.01) {
+            trend.className = `tile-trend ${diff > 0 ? 'up' : 'down'}`;
+            trend.textContent = diff > 0 ? '↑' : '↓';
+        } else { trend.className = ''; trend.textContent = ''; }
     }
-    
-    // Efekt wizualny aktualizacji
     tileEl.classList.remove('updated');
     void tileEl.offsetWidth;
     tileEl.classList.add('updated');
-    
-    // Zapisz ostatnią wartość
-    lastValues[id] = {
-        value: value,
-        timestamp: now.getTime(),
-        formattedTime: now.toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'})
-    };
-    
-    console.log(`Zaktualizowano kafelek ${id}: ${value}`);
+    lastValues[id] = { value, timestamp: Date.now() };
 }
 
-// Inicjalizacja wykresów - POPRAWIONE
-function initCharts() {
-    if (typeof Chart === 'undefined') {
-        console.error('Chart.js nie jest dostępny!');
+function saveToHistory() {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pl-PL');
+    const timeStr = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    const data = {
+        timestamp: now.toISOString(),
+        date: dateStr,
+        time: timeStr,
+        temp_room: lastValues.temp_room?.value || '0',
+        temp_set: lastValues.temp_set?.value || '0',
+        temp_pipe: lastValues.temp_pipe?.value || '0',
+        temp_outside: lastValues.temp_outside?.value || '0',
+        temp_module: lastValues.temp_module?.value || '0',
+        temp_exchanger: lastValues.temp_exchanger?.value || '0',
+        temp_discharge: lastValues.temp_discharge?.value || '0',
+        compressor: lastValues.compressor?.value || '0',
+        current: lastValues.current?.value || '0',
+        fan_rpm: lastValues.fan_rpm?.value || '0',
+        fan_speed: lastValues.fan_speed?.value || '---',
+        mode: lastValues.mode?.value || '---'
+    };
+    historyData.unshift(data);
+    if (historyData.length > MAX_HISTORY) historyData.pop();
+    try { localStorage.setItem('racHistoryData', JSON.stringify(historyData)); } catch(e) {}
+}
+
+function loadHistoryFromStorage() {
+    try { const saved = localStorage.getItem('racHistoryData'); if (saved) historyData = JSON.parse(saved); } catch(e) { historyData = []; }
+}
+
+function clearHistory() {
+    if (confirm('Czy na pewno chcesz wyczyścić historię?')) {
+        historyData = [];
+        saveHistoryToStorage();
+        loadHistoryData();
+        showSaveMessage('Historia została wyczyszczona!');
+    }
+}
+
+function saveHistoryToStorage() {
+    try { localStorage.setItem('racHistoryData', JSON.stringify(historyData)); } catch(e) {}
+}
+
+function exportHistoryToCSV() {
+    if (!historyData.length) { alert('Brak danych do eksportu!'); return; }
+    
+    // 14 kolumn: Data, Godzina, i 12 parametrów
+    const headers = [
+        'Data',
+        'Godzina',
+        'Temperatura pokojowa [°C]',
+        'Temperatura zadana [°C]',
+        'Temperatura rury [°C]',
+        'Temperatura zewnętrzna [°C]',
+        'Temperatura modułu [°C]',
+        'Temperatura wymiennika [°C]',
+        'Temperatura tłoczenia [°C]',
+        'Kompresor [Hz]',
+        'Prąd [A]',
+        'Wentylator ODU [rpm]',
+        'Wentylator IDU',
+        'Tryb pracy'
+    ];
+    
+    const rows = historyData.map(r => [
+        r.date,
+        r.time,
+        r.temp_room,
+        r.temp_set,
+        r.temp_pipe,
+        r.temp_outside,
+        r.temp_module,
+        r.temp_exchanger,
+        r.temp_discharge,
+        r.compressor,
+        r.current,
+        r.fan_rpm,
+        r.fan_speed,
+        r.mode
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `rac_history_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showSaveMessage('Dane wyeksportowane do CSV! (14 kolumn)');
+}
+
+function loadHistoryData() {
+    const tbody = document.getElementById('historyTableBody');
+    if (!tbody) return;
+    const range = document.getElementById('historyRange')?.value;
+    const limit = document.getElementById('historyLimit')?.value;
+    let filtered = [...historyData];
+    if (range && range !== '0') {
+        const days = parseInt(range);
+        const cutoff = Date.now() - days * 86400000;
+        filtered = filtered.filter(r => new Date(r.timestamp).getTime() >= cutoff);
+    }
+    if (limit && limit !== '0') filtered = filtered.slice(0, parseInt(limit));
+    if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px"><i class="fas fa-database"></i><p>Brak danych historycznych</p><p style="font-size:0.75rem">Połącz się z MQTT aby zbierać dane</p></td></tr>';
         return;
     }
+    tbody.innerHTML = filtered.map(d => `
+        <tr>
+            <td>${d.date}</td>
+            <td>${d.time}</td>
+            <td>${d.temp_room}°C</td>
+            <td>${d.temp_set}°C</td>
+            <td>${d.temp_pipe}°C</td>
+            <td>${d.temp_outside}°C</td>
+            <td>${d.temp_module}°C</td>
+            <td>${d.temp_exchanger}°C</td>
+            <td>${d.temp_discharge}°C</td>
+            <td>${d.compressor} Hz</td>
+            <td>${d.current} A</td>
+            <td>${d.fan_rpm} rpm</td>
+            <td>${d.fan_speed}</td>
+            <td>${d.mode}</td>
+         </tr>
+    `).join('');
+}
+
+function initCharts() {
+    if (typeof Chart === 'undefined') return;
     
-    const commonChartOptions = {
+    const commonOpts = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-            legend: {
-                display: false,
-                position: 'top',
-                labels: {
-                    color: '#94a3b8',
-                    font: { size: 11 },
-                    usePointStyle: true,
-                    boxWidth: 6,
-                    padding: 10
-                }
-            },
-            tooltip: {
-                mode: 'index',
-                intersect: false,
-                backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                titleColor: '#f8fafc',
-                bodyColor: '#f8fafc',
-                padding: 10,
-                cornerRadius: 6
-            }
+            legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true, boxWidth: 8 } },
+            tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(15,23,42,0.9)', titleColor: '#f8fafc', bodyColor: '#f8fafc', padding: 10, cornerRadius: 8 }
         },
         scales: {
-            x: {
-                grid: { 
-                    color: 'rgba(255, 255, 255, 0.05)',
-                    drawBorder: false
-                },
-                ticks: { 
-                    color: '#94a3b8', 
-                    maxTicksLimit: 8,
-                    font: { size: 10 }
-                },
-                border: { display: false },
-                reverse: false // WAŻNE: nowe dane po prawej stronie
-            },
-            y: {
-                grid: { 
-                    color: 'rgba(255, 255, 255, 0.05)',
-                    drawBorder: false
-                },
-                ticks: { 
-                    color: '#94a3b8',
-                    font: { size: 10 }
-                },
-                beginAtZero: false,
-                border: { display: false }
-            }
+            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 45, font: { size: 10 } } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } }
         },
-        elements: {
-            point: { 
-                radius: 0, 
-                hoverRadius: 4,
-                hoverBorderWidth: 2
-            },
-            line: {
-                tension: 0.4,
-                borderWidth: 2
-            }
-        },
-        interaction: {
-            intersect: false,
-            mode: 'index'
-        },
-        animation: {
-            duration: 0
-        }
+        elements: { point: { radius: 3, hoverRadius: 6, borderWidth: 2, backgroundColor: 'white' }, line: { tension: 0.3, borderWidth: 2 } },
+        interaction: { intersect: false, mode: 'index' },
+        animation: { duration: 0 }
     };
     
-    try {
-        // Temperatury IDU
-        const indoorCtx = document.getElementById('chartIndoor')?.getContext('2d');
-        if (indoorCtx) {
-            charts.indoor = new Chart(indoorCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { 
-                            label: 'Temperatura pokojowa', 
-                            data: [], 
-                            borderColor: '#3b82f6', 
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#3b82f6',
-                            tension: 0.4
-                        },
-                        { 
-                            label: 'Temperatura rury', 
-                            data: [], 
-                            borderColor: '#10b981', 
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#10b981',
-                            tension: 0.4
-                        },
-                        { 
-                            label: 'Temperatura zadana', 
-                            data: [], 
-                            borderColor: '#f59e0b', 
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#f59e0b',
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: commonChartOptions
-            });
-        }
-        
-        // Temperatury ODU
-        const outdoorCtx = document.getElementById('chartOutdoor')?.getContext('2d');
-        if (outdoorCtx) {
-            charts.outdoor = new Chart(outdoorCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { 
-                            label: 'Temperatura modułu', 
-                            data: [], 
-                            borderColor: '#3b82f6', 
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#3b82f6',
-                            tension: 0.4
-                        },
-                        { 
-                            label: 'Temperatura zewnętrzna', 
-                            data: [], 
-                            borderColor: '#10b981', 
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#10b981',
-                            tension: 0.4
-                        },
-                        { 
-                            label: 'Temperatura wymiennika', 
-                            data: [], 
-                            borderColor: '#f59e0b', 
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#f59e0b',
-                            tension: 0.4
-                        },
-                        { 
-                            label: 'Temperatura tłoczenia', 
-                            data: [], 
-                            borderColor: '#ef4444', 
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#ef4444',
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: commonChartOptions
-            });
-        }
-        
-        // Prąd kompresora
-        const currentCtx = document.getElementById('chartCurrent')?.getContext('2d');
-        if (currentCtx) {
-            charts.current = new Chart(currentCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { 
-                            label: 'Prąd kompresora [A]', 
-                            data: [], 
-                            borderColor: '#f59e0b', 
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#f59e0b',
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: commonChartOptions
-            });
-        }
-        
-        // Częstotliwość kompresora
-        const compressorCtx = document.getElementById('chartCompressor')?.getContext('2d');
-        if (compressorCtx) {
-            charts.compressor = new Chart(compressorCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { 
-                            label: 'Częstotliwość kompresora [Hz]', 
-                            data: [], 
-                            borderColor: '#8b5cf6', 
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#8b5cf6',
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: commonChartOptions
-            });
-        }
-        
-        // Wentylator ODU
-        const fanCtx = document.getElementById('chartFanRpm')?.getContext('2d');
-        if (fanCtx) {
-            charts.fan = new Chart(fanCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { 
-                            label: 'Prędkość wentylatora [rpm]', 
-                            data: [], 
-                            borderColor: '#06b6d4', 
-                            backgroundColor: 'rgba(6, 182, 212, 0.1)', 
-                            fill: true,
-                            pointBackgroundColor: '#06b6d4',
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: commonChartOptions
-            });
-        }
-        
-        console.log('Wykresy zainicjalizowane pomyślnie');
-        
-        // Dodaj początkowe puste dane
-        initializeChartData();
-        
-    } catch (error) {
-        console.error('Błąd inicjalizacji wykresów:', error);
-    }
-}
-
-// Inicjalizuj dane wykresów
-function initializeChartData() {
-    const now = new Date();
-    const timeLabel = now.toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'});
+    // Wykres temperatury IDU (może przyjmować wartości ujemne)
+    const indoorOpts = JSON.parse(JSON.stringify(commonOpts));
+    indoorOpts.scales.y.beginAtZero = false;
     
-    // Inicjalizuj każdy wykres z pustymi danymi
+    const indoor = document.getElementById('chartIndoor')?.getContext('2d');
+    if (indoor) charts.indoor = new Chart(indoor, {
+        type: 'line',
+        data: { labels: [], datasets: [
+            { label: 'Temperatura pokojowa', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.05)', fill: true, pointBackgroundColor: '#3b82f6', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 },
+            { label: 'Temperatura rury', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.05)', fill: true, pointBackgroundColor: '#10b981', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 },
+            { label: 'Temperatura zadana', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.05)', fill: true, pointBackgroundColor: '#f59e0b', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 }
+        ] },
+        options: indoorOpts
+    });
+    
+    // Wykres temperatury ODU (może przyjmować wartości ujemne)
+    const outdoorOpts = JSON.parse(JSON.stringify(commonOpts));
+    outdoorOpts.scales.y.beginAtZero = false;
+    
+    const outdoor = document.getElementById('chartOutdoor')?.getContext('2d');
+    if (outdoor) charts.outdoor = new Chart(outdoor, {
+        type: 'line',
+        data: { labels: [], datasets: [
+            { label: 'Temperatura modułu', data: [], borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.05)', fill: true, pointBackgroundColor: '#8b5cf6', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 },
+            { label: 'Temperatura zewnętrzna', data: [], borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.05)', fill: true, pointBackgroundColor: '#f97316', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 },
+            { label: 'Temperatura wymiennika', data: [], borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.05)', fill: true, pointBackgroundColor: '#a855f7', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 },
+            { label: 'Temperatura tłoczenia', data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.05)', fill: true, pointBackgroundColor: '#ef4444', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 }
+        ] },
+        options: outdoorOpts
+    });
+    
+    // Wykres prądu (skala od 0)
+    const currentOpts = JSON.parse(JSON.stringify(commonOpts));
+    currentOpts.scales.y.beginAtZero = true;
+    
+    const current = document.getElementById('chartCurrent')?.getContext('2d');
+    if (current) charts.current = new Chart(current, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Prąd [A]', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.05)', fill: true, pointBackgroundColor: '#f59e0b', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 }] },
+        options: currentOpts
+    });
+    
+    // Wykres częstotliwości kompresora (skala od 0)
+    const compressorOpts = JSON.parse(JSON.stringify(commonOpts));
+    compressorOpts.scales.y.beginAtZero = true;
+    
+    const compressor = document.getElementById('chartCompressor')?.getContext('2d');
+    if (compressor) charts.compressor = new Chart(compressor, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Kompresor [Hz]', data: [], borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.05)', fill: true, pointBackgroundColor: '#8b5cf6', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 }] },
+        options: compressorOpts
+    });
+    
+    // Wykres wentylatora (skala od 0)
+    const fanOpts = JSON.parse(JSON.stringify(commonOpts));
+    fanOpts.scales.y.beginAtZero = true;
+    
+    const fan = document.getElementById('chartFanRpm')?.getContext('2d');
+    if (fan) charts.fan = new Chart(fan, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Wentylator [rpm]', data: [], borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,0.05)', fill: true, pointBackgroundColor: '#06b6d4', pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 6 }] },
+        options: fanOpts
+    });
+    
+    // Dodaj interaktywne punkty - po kliknięciu pokazują wartość
     Object.values(charts).forEach(chart => {
         if (chart) {
-            // Dodaj początkową etykietę
-            chart.data.labels.push(timeLabel);
-            
-            // Dodaj początkową wartość (0) do każdego datasetu
-            chart.data.datasets.forEach(dataset => {
-                dataset.data.push(0);
-            });
-            
-            chart.update('none');
-        }
-    });
-}
-
-// Aktualizacja wykresu - POPRAWIONE
-function updateChart(chart, value, datasetIndex = null) {
-    if (!chart || !chart.data || !chart.data.datasets) {
-        console.warn('Próba aktualizacji nieistniejącego lub uszkodzonego wykresu');
-        return;
-    }
-    
-    const now = new Date();
-    const timeLabel = now.toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'});
-    const numValue = parseFloat(value);
-    
-    if (isNaN(numValue)) {
-        console.warn('Próba dodania nieprawidłowej wartości do wykresu:', value);
-        return;
-    }
-    
-    // Sprawdź czy dataset istnieje
-    if (datasetIndex !== null && !chart.data.datasets[datasetIndex]) {
-        console.error('Dataset nie istnieje:', datasetIndex);
-        return;
-    }
-    
-    // Sprawdź czy ostatnia etykieta jest taka sama jak aktualna
-    const lastLabel = chart.data.labels.length > 0 ? chart.data.labels[chart.data.labels.length - 1] : null;
-    const isSameTime = lastLabel === timeLabel;
-    
-    if (!isSameTime) {
-        // Dodaj NOWĄ etykietę czasu
-        chart.data.labels.push(timeLabel);
-        
-        // Dodaj wartości do WSZYSTKICH datasetów
-        chart.data.datasets.forEach((dataset, index) => {
-            if (datasetIndex === null || index === datasetIndex) {
-                // Dodaj aktualną wartość dla tego datasetu
-                dataset.data.push(numValue);
-            } else {
-                // Dla innych datasetów, użyj ostatniej wartości lub 0
-                const lastValue = dataset.data.length > 0 ? dataset.data[dataset.data.length - 1] : 0;
-                dataset.data.push(lastValue);
-            }
-        });
-    } else {
-        // Aktualizuj tylko wartość w istniejącym czasie
-        if (datasetIndex !== null && chart.data.datasets[datasetIndex]) {
-            const dataIndex = chart.data.datasets[datasetIndex].data.length - 1;
-            if (dataIndex >= 0) {
-                chart.data.datasets[datasetIndex].data[dataIndex] = numValue;
-            }
-        }
-    }
-    
-    // Ogranicz do maksymalnej liczby punktów - USUŃ NAJSTARSZE
-    if (chart.data.labels.length > maxChartPoints) {
-        // Usuń najstarszą etykietę
-        chart.data.labels.shift();
-        
-        // Usuń najstarsze wartości ze wszystkich datasetów
-        chart.data.datasets.forEach(dataset => {
-            if (dataset.data && dataset.data.length > 0) {
-                dataset.data.shift();
-            }
-        });
-    }
-    
-    // Aktualizuj wykres
-    try {
-        chart.update('none');
-        lastUpdateTime = timeLabel;
-    } catch (error) {
-        console.error('Błąd aktualizacji wykresu:', error);
-    }
-}
-
-// Inicjalizacja nasłuchiwania zdarzeń
-function initEventListeners() {
-    console.log('Inicjalizacja nasłuchiwania zdarzeń...');
-    
-    // Przyciski MQTT
-    const btnConnect = document.getElementById('btnConnect');
-    const btnDisconnect = document.getElementById('btnDisconnect');
-    const btnTest = document.getElementById('btnTest');
-    const mqttToggle = document.getElementById('mqttTogglePw');
-    
-    if (btnConnect) btnConnect.addEventListener('click', connectMQTT);
-    if (btnDisconnect) btnDisconnect.addEventListener('click', disconnectMQTT);
-    if (btnTest) btnTest.addEventListener('click', sendTestData);
-    
-    // Double-click do resetowania ustawień
-    if (btnConnect) btnConnect.addEventListener('dblclick', resetMQTTSettings);
-    
-    // Dodaj obsługę przycisku resetu ustawień
-    const resetSettingsBtn = document.getElementById('resetSettings');
-    if (resetSettingsBtn) {
-        resetSettingsBtn.addEventListener('click', resetMQTTSettings);
-    }
-    
-    // Toggle hasła MQTT
-    if (mqttToggle) {
-        mqttToggle.addEventListener('click', function() {
-            const passwordInput = document.getElementById('mqttPass');
-            if (!passwordInput) return;
-            
-            const icon = mqttToggle.querySelector('i');
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-            } else {
-                passwordInput.type = 'password';
-                icon.className = 'fas fa-eye';
-            }
-        });
-    }
-    
-    // Przycisk testowania połączenia
-    const testConnectionBtn = document.getElementById('testConnection');
-    if (testConnectionBtn) {
-        testConnectionBtn.addEventListener('click', testMQTTConnection);
-    }
-    
-    // Przycisk diagnostyki
-    const showDiagnosticsBtn = document.getElementById('showDiagnostics');
-    if (showDiagnosticsBtn) {
-        showDiagnosticsBtn.addEventListener('click', function() {
-            const diagnosticsEl = document.getElementById('connectionDiagnostics');
-            if (diagnosticsEl) {
-                if (diagnosticsEl.style.display === 'none') {
-                    diagnosticsEl.style.display = 'block';
-                    this.innerHTML = '<i class="fas fa-eye-slash"></i> Ukryj diagnostykę';
-                } else {
-                    diagnosticsEl.style.display = 'none';
-                    this.innerHTML = '<i class="fas fa-eye"></i> Pokaż diagnostykę';
+            chart.canvas.addEventListener('click', (e) => {
+                const points = chart.getElementsAtEvent(e);
+                if (points.length) {
+                    const point = points[0];
+                    const dataset = chart.data.datasets[point.datasetIndex];
+                    const label = chart.data.labels[point.index];
+                    const value = dataset.data[point.index];
+                    showSaveMessage(`${dataset.label}: ${value} (${label})`);
                 }
-            }
-        });
-    }
-    
-    // Przycisk debugowania wykresów
-    const debugChartsBtn = document.getElementById('debugCharts');
-    if (debugChartsBtn) {
-        debugChartsBtn.addEventListener('click', debugCharts);
-    }
-    
-    // Automatyczna aktualizacja portu i protokołu
-    const portSelect = document.getElementById('port');
-    const protocolSelect = document.getElementById('protocol');
-    
-    if (portSelect && protocolSelect) {
-        portSelect.addEventListener('change', function() {
-            const port = this.value;
-            if (port === '8883') {
-                protocolSelect.value = 'mqtts';
-            } else if (port === '8884') {
-                protocolSelect.value = 'wss';
-            } else if (port === '8080') {
-                protocolSelect.value = 'ws';
-            } else if (port === '1883') {
-                protocolSelect.value = 'mqtt';
-            }
-        });
-        
-        protocolSelect.addEventListener('change', function() {
-            const protocol = this.value;
-            if (protocol === 'mqtts') {
-                portSelect.value = '8883';
-            } else if (protocol === 'wss') {
-                portSelect.value = '8884';
-            } else if (protocol === 'ws') {
-                portSelect.value = '8080';
-            } else if (protocol === 'mqtt') {
-                portSelect.value = '1883';
-            }
-        });
-    }
-    
-    // Monitor wiadomości
-    const clearMessagesBtn = document.getElementById('clearMessages');
-    const pauseMessagesBtn = document.getElementById('pauseMessages');
-    
-    if (clearMessagesBtn) clearMessagesBtn.addEventListener('click', clearMessages);
-    if (pauseMessagesBtn) pauseMessagesBtn.addEventListener('click', togglePauseMessages);
-    
-    // Przycisk odświeżania
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
-    
-    // Przycisk czyszczenia wykresów
-    const clearChartsBtn = document.getElementById('clearCharts');
-    if (clearChartsBtn) clearChartsBtn.addEventListener('click', clearCharts);
-    
-    // Przycisk ładowania historii
-    const loadHistoryBtn = document.getElementById('loadHistory');
-    if (loadHistoryBtn) loadHistoryBtn.addEventListener('click', loadHistoryData);
-    
-    // Przycisk eksportu wykresów
-    const exportChartsBtn = document.getElementById('exportCharts');
-    if (exportChartsBtn) exportChartsBtn.addEventListener('click', exportChartsData);
-    
-    // Przycisk zastosuj dla zakresu czasu
-    const applyRangeBtn = document.getElementById('applyRangeBtn');
-    if (applyRangeBtn) {
-        applyRangeBtn.addEventListener('click', function() {
-            const rangeSelect = document.getElementById('rangeSelect');
-            if (rangeSelect) {
-                const intervalSeconds = parseInt(rangeSelect.value);
-                addMessage('system', `Zastosowano zakres czasu: ${getTimeRangeLabel(intervalSeconds)}`);
-                showSaveMessage(`Zakres czasu ustawiony na: ${getTimeRangeLabel(intervalSeconds)}`);
-                
-                // Aktualizuj maxChartPoints w zależności od zakresu
-                updateMaxChartPoints(intervalSeconds);
-            }
-        });
-    }
-    
-    // Ustawienia
-    document.querySelectorAll('.settings-nav-item').forEach(item => {
-        item.addEventListener('click', function() {
-            const tab = this.getAttribute('data-tab');
-            showSettingsTab(tab);
-        });
-    });
-    
-    // Ustawienia automatycznego odświeżania
-    const autoRefreshSelect = document.getElementById('autoRefresh');
-    if (autoRefreshSelect) {
-        autoRefreshSelect.addEventListener('change', function() {
-            const interval = parseInt(this.value);
-            setupAutoRefresh(interval);
-        });
-    }
-    
-    console.log('Wszystkie zdarzenia zarejestrowane');
-}
-
-// Aktualizuj maksymalną liczbę punktów w zależności od zakresu czasu
-function updateMaxChartPoints(seconds) {
-    if (seconds <= 300) { // 5 minut
-        maxChartPoints = 30;
-    } else if (seconds <= 1800) { // 30 minut
-        maxChartPoints = 60;
-    } else if (seconds <= 3600) { // 1 godzina
-        maxChartPoints = 60;
-    } else if (seconds <= 21600) { // 6 godzin
-        maxChartPoints = 72;
-    } else if (seconds <= 43200) { // 12 godzin
-        maxChartPoints = 72;
-    } else { // 24 godziny
-        maxChartPoints = 96;
-    }
-}
-
-// Funkcja pomocnicza do etykiety zakresu czasu
-function getTimeRangeLabel(seconds) {
-    const ranges = {
-        300: '5 minut',
-        1800: '30 minut',
-        3600: '1 godzina',
-        21600: '6 godzin',
-        43200: '12 godzin',
-        86400: '24 godziny'
-    };
-    return ranges[seconds] || 'Niezdefiniowany';
-}
-
-// Inicjalizacja ustawień wyglądu
-function initAppearanceSettings() {
-    const saveAppearanceBtn = document.getElementById('saveAppearance');
-    const appearanceSelects = document.querySelectorAll('#settingsAppearance select');
-    
-    if (saveAppearanceBtn) {
-        saveAppearanceBtn.addEventListener('click', saveAppearanceSettings);
-    }
-    
-    // Nasłuchuj zmian w ustawieniach wyglądu
-    if (appearanceSelects) {
-        appearanceSelects.forEach(select => {
-            select.addEventListener('change', function() {
-                settingsChanged = true;
-                showSaveButton();
             });
+        }
+    });
+}
+
+function updateChart(chart, value, idx) {
+    if (!chart) return;
+    const now = new Date();
+    const label = now.toLocaleTimeString('pl-PL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    const num = parseFloat(value);
+    if (isNaN(num)) return;
+    const last = chart.data.labels[chart.data.labels.length-1];
+    if (last !== label) {
+        chart.data.labels.push(label);
+        chart.data.datasets.forEach((ds, i) => {
+            if (idx === null || i === idx) ds.data.push(num);
+            else ds.data.push(ds.data[ds.data.length-1] || 0);
         });
+    } else if (idx !== null && chart.data.datasets[idx]) {
+        const pos = chart.data.datasets[idx].data.length - 1;
+        if (pos >= 0) chart.data.datasets[idx].data[pos] = num;
     }
+    while (chart.data.labels.length > maxChartPoints) {
+        chart.data.labels.shift();
+        chart.data.datasets.forEach(ds => ds.data.shift());
+    }
+    chart.update('none');
 }
 
-// Pokaz przycisk zapisu
-function showSaveButton() {
-    const saveBtn = document.getElementById('saveAppearance');
-    if (saveBtn) {
-        saveBtn.style.display = 'flex';
-    }
+function initEventListeners() {
+    document.getElementById('btnConnect')?.addEventListener('click', connectMQTT);
+    document.getElementById('btnDisconnect')?.addEventListener('click', disconnectMQTT);
+    document.getElementById('btnConnect')?.addEventListener('dblclick', resetMQTTSettings);
+    document.getElementById('resetSettings')?.addEventListener('click', resetMQTTSettings);
+    document.getElementById('mqttTogglePw')?.addEventListener('click', () => { const p = document.getElementById('mqttPass'); if(p) p.type = p.type === 'password' ? 'text' : 'password'; });
+    document.getElementById('clearMessages')?.addEventListener('click', clearMessages);
+    document.getElementById('pauseMessages')?.addEventListener('click', togglePauseMessages);
+    document.getElementById('refreshBtn')?.addEventListener('click', refreshData);
+    document.getElementById('clearCharts')?.addEventListener('click', clearCharts);
+    document.getElementById('loadHistory')?.addEventListener('click', loadHistoryData);
+    document.getElementById('clearHistory')?.addEventListener('click', clearHistory);
+    document.getElementById('exportHistory')?.addEventListener('click', exportHistoryToCSV);
+    document.getElementById('exportCharts')?.addEventListener('click', exportChartsData);
+    document.getElementById('applyRangeBtn')?.addEventListener('click', () => { const s = document.getElementById('rangeSelect'); if(s) updateMaxChartPoints(parseInt(s.value)); });
+    document.getElementById('saveAppearance')?.addEventListener('click', saveAppearanceSettings);
+    document.getElementById('themeSelect')?.addEventListener('change', () => { const s = { theme: document.getElementById('themeSelect').value, tileLayout: document.getElementById('tileLayout')?.value || 'grid' }; applyAppearanceSettings(s); localStorage.setItem('appearanceSettings', JSON.stringify(s)); showSaveMessage('Motyw zmieniony!'); });
+    document.getElementById('tileLayout')?.addEventListener('change', () => { const s = { theme: document.getElementById('themeSelect')?.value || 'dark', tileLayout: document.getElementById('tileLayout').value }; applyAppearanceSettings(s); localStorage.setItem('appearanceSettings', JSON.stringify(s)); showSaveMessage('Układ zmieniony!'); });
+    document.getElementById('autoRefresh')?.addEventListener('change', () => setupAutoRefresh(parseInt(document.getElementById('autoRefresh').value)));
+    document.getElementById('temperatureUnit')?.addEventListener('change', () => localStorage.setItem('temperatureUnit', document.getElementById('temperatureUnit').value));
+    document.getElementById('timeFormat')?.addEventListener('change', () => { localStorage.setItem('timeFormat', document.getElementById('timeFormat').value); initClock(); });
+    document.querySelectorAll('.settings-nav-item').forEach(item => item.addEventListener('click', () => showSettingsTab(item.dataset.tab)));
 }
 
-// Testowanie konfiguracji MQTT
-function testMQTTConnection() {
-    addDiagnostic('=== TEST POŁĄCZENIA ===');
-    addDiagnostic('Sprawdzanie konfiguracji...');
-    
-    const brokerInput = document.getElementById('broker');
-    const userInput = document.getElementById('mqttUser');
-    const passInput = document.getElementById('mqttPass');
-    
-    if (!brokerInput || !userInput || !passInput) {
-        addDiagnostic('BŁĄD: Brak pól konfiguracyjnych');
-        return;
-    }
-    
-    const broker = brokerInput.value.trim();
-    const user = userInput.value.trim();
-    const pass = passInput.value.trim();
-    
-    addDiagnostic(`Broker: ${broker}`);
-    addDiagnostic(`Użytkownik: ${user}`);
-    addDiagnostic(`Hasło: ${pass ? 'ustawione' : 'brak'}`);
-    
-    // Sprawdź czy URL jest poprawny
-    try {
-        new URL(broker);
-        addDiagnostic('✓ URL jest poprawny');
-    } catch (e) {
-        addDiagnostic(`✗ Niepoprawny URL: ${e.message}`);
-    }
+function updateMaxChartPoints(sec) {
+    if (sec <= 300) maxChartPoints = 30;
+    else if (sec <= 1800) maxChartPoints = 60;
+    else if (sec <= 3600) maxChartPoints = 60;
+    else if (sec <= 21600) maxChartPoints = 72;
+    else if (sec <= 43200) maxChartPoints = 72;
+    else maxChartPoints = 96;
 }
 
-// Zapisz ustawienia wyglądu
-function saveAppearanceSettings() {
-    const themeSelect = document.getElementById('themeSelect');
-    const tileLayout = document.getElementById('tileLayout');
-    
-    if (themeSelect && tileLayout) {
-        const settings = {
-            theme: themeSelect.value,
-            tileLayout: tileLayout.value
-        };
-        
-        // Zapisz do localStorage
-        try {
-            localStorage.setItem('appearanceSettings', JSON.stringify(settings));
-            
-            // Aplikuj zmiany
-            applyAppearanceSettings(settings);
-            
-            // Wyświetl komunikat
-            showSaveMessage('Ustawienia wyglądu zostały zapisane!');
-            
-            // Ukryj przycisk zapisu
-            const saveBtn = document.getElementById('saveAppearance');
-            if (saveBtn) {
-                saveBtn.style.display = 'none';
-            }
-            
-            settingsChanged = false;
-            
-        } catch (e) {
-            console.error('Błąd zapisywania ustawień wyglądu:', e);
-            showSaveMessage('Błąd zapisywania ustawień!', true);
-        }
-    }
+function initAppearanceSettings() { loadAppearanceSettings(); }
+function saveAppearanceSettings() { const s = { theme: document.getElementById('themeSelect').value, tileLayout: document.getElementById('tileLayout').value }; localStorage.setItem('appearanceSettings', JSON.stringify(s)); applyAppearanceSettings(s); showSaveMessage('Ustawienia zapisane!'); }
+function applyAppearanceSettings(s) {
+    if (s.theme === 'light') document.body.classList.add('light-theme');
+    else if (s.theme === 'dark') document.body.classList.remove('light-theme');
+    else if (window.matchMedia('(prefers-color-scheme: light)').matches) document.body.classList.add('light-theme');
+    else document.body.classList.remove('light-theme');
+    const odu = document.querySelector('.odu-grid'), idu = document.querySelector('.idu-grid');
+    if (odu && idu) { const col = s.tileLayout === 'list' ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))'; odu.style.gridTemplateColumns = col; idu.style.gridTemplateColumns = col; }
 }
-
-// Aplikuj ustawienia wyglądu
-function applyAppearanceSettings(settings) {
-    // Zmiana motywu
-    if (settings.theme === 'light') {
-        document.body.classList.add('light-theme');
-        document.body.classList.remove('dark-theme');
-    } else if (settings.theme === 'dark') {
-        document.body.classList.add('dark-theme');
-        document.body.classList.remove('light-theme');
-    } else {
-        // Auto - sprawdź preferencje systemu
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-            document.body.classList.add('light-theme');
-            document.body.classList.remove('dark-theme');
-        } else {
-            document.body.classList.add('dark-theme');
-            document.body.classList.remove('light-theme');
-        }
-    }
-    
-    // Zmiana układu kafelków
-    const oduGrid = document.querySelector('.odu-grid');
-    const iduGrid = document.querySelector('.idu-grid');
-    
-    if (oduGrid && iduGrid) {
-        if (settings.tileLayout === 'list') {
-            oduGrid.style.gridTemplateColumns = '1fr';
-            iduGrid.style.gridTemplateColumns = '1fr';
-        } else {
-            oduGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
-            iduGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
-        }
-    }
-}
-
-// Wyświetl komunikat o zapisie
-function showSaveMessage(message, isError = false) {
-    const msgElement = document.createElement('div');
-    msgElement.className = `save-message ${isError ? 'error' : 'success'}`;
-    msgElement.textContent = message;
-    msgElement.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 24px;
-        background: ${isError ? '#ef4444' : '#10b981'};
-        color: white;
-        border-radius: 8px;
-        z-index: 10000;
-        animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    `;
-    
-    document.body.appendChild(msgElement);
-    
-    // Usuń komunikat po 3 sekundach
-    setTimeout(() => {
-        if (msgElement.parentNode) {
-            msgElement.parentNode.removeChild(msgElement);
-        }
-    }, 3000);
-}
-
-// Załaduj zapisane ustawienia wyglądu
+function showSaveMessage(msg, err = false) { const d = document.createElement('div'); d.className = `save-message ${err ? 'error' : 'success'}`; d.textContent = msg; document.body.appendChild(d); setTimeout(() => d.remove(), 3000); }
 function loadAppearanceSettings() {
-    try {
-        const saved = localStorage.getItem('appearanceSettings');
-        if (saved) {
-            const settings = JSON.parse(saved);
-            
-            const themeSelect = document.getElementById('themeSelect');
-            const tileLayout = document.getElementById('tileLayout');
-            
-            if (themeSelect) themeSelect.value = settings.theme || 'dark';
-            if (tileLayout) tileLayout.value = settings.tileLayout || 'grid';
-            
-            applyAppearanceSettings(settings);
-        }
-    } catch (e) {
-        console.error('Błąd ładowania ustawień wyglądu:', e);
-    }
+    try { const s = JSON.parse(localStorage.getItem('appearanceSettings')); if(s) { if(document.getElementById('themeSelect')) document.getElementById('themeSelect').value = s.theme; if(document.getElementById('tileLayout')) document.getElementById('tileLayout').value = s.tileLayout; applyAppearanceSettings(s); } } catch(e) {}
+    const tu = localStorage.getItem('temperatureUnit'); if(tu && document.getElementById('temperatureUnit')) document.getElementById('temperatureUnit').value = tu;
+    const tf = localStorage.getItem('timeFormat'); if(tf && document.getElementById('timeFormat')) document.getElementById('timeFormat').value = tf;
+    const ar = localStorage.getItem('autoRefresh'); if(ar && document.getElementById('autoRefresh')) { document.getElementById('autoRefresh').value = ar; setupAutoRefresh(parseInt(ar)); }
 }
-
-// Funkcja eksportu danych wykresów
 function exportChartsData() {
-    try {
-        const data = {
-            timestamp: new Date().toISOString(),
-            indoor: getChartData(charts.indoor),
-            outdoor: getChartData(charts.outdoor),
-            current: getChartData(charts.current),
-            compressor: getChartData(charts.compressor),
-            fan: getChartData(charts.fan)
-        };
-        
-        const dataStr = JSON.stringify(data, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        
-        const exportFileDefaultName = `mqtt_dashboard_export_${new Date().toISOString().slice(0, 10)}.json`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-        
-        addMessage('export', 'Dane wykresów wyeksportowane');
-        showSaveMessage('Dane wykresów zostały wyeksportowane!');
-    } catch (error) {
-        console.error('Błąd eksportu danych:', error);
-        showSaveMessage('Wystąpił błąd podczas eksportu danych!', true);
-    }
+    const data = { timestamp: new Date().toISOString(), indoor: getChartData(charts.indoor), outdoor: getChartData(charts.outdoor), current: getChartData(charts.current), compressor: getChartData(charts.compressor), fan: getChartData(charts.fan), history: historyData.slice(0,100) };
+    const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data,null,2)); a.download = `rac_export_${new Date().toISOString().slice(0,19)}.json`; a.click(); showSaveMessage('Eksport zakończony!');
 }
-
-function getChartData(chart) {
-    if (!chart) return { labels: [], datasets: [] };
-    return {
-        labels: chart.data.labels,
-        datasets: chart.data.datasets.map(ds => ({ label: ds.label, data: ds.data }))
-    };
-}
-
-// Załaduj zapisane ustawienia
+function getChartData(c) { return c ? { labels: c.data.labels, datasets: c.data.datasets.map(ds => ({ label: ds.label, data: ds.data })) } : { labels: [], datasets: [] }; }
 function loadSavedSettings() {
-    try {
-        const saved = localStorage.getItem('mqttSettings');
-        if (saved) {
-            const settings = JSON.parse(saved);
-            
-            const brokerInput = document.getElementById('broker');
-            const userInput = document.getElementById('mqttUser');
-            const passInput = document.getElementById('mqttPass');
-            const clientIdInput = document.getElementById('clientId');
-            const keepAliveInput = document.getElementById('keepAlive');
-            const portSelect = document.getElementById('port');
-            const protocolSelect = document.getElementById('protocol');
-            const useTLSCheckbox = document.getElementById('useTLS');
-            
-            if (brokerInput) brokerInput.value = settings.broker || '';
-            if (userInput) userInput.value = settings.user || '';
-            if (passInput) passInput.value = settings.pass || '';
-            if (clientIdInput) clientIdInput.value = settings.clientId || `M5StickC_Dashboard_${Date.now()}`;
-            if (keepAliveInput) keepAliveInput.value = settings.keepAlive || '60';
-            if (portSelect) portSelect.value = settings.port || '8884';
-            if (protocolSelect) protocolSelect.value = settings.protocol || 'wss';
-            if (useTLSCheckbox) useTLSCheckbox.checked = settings.useTLS !== false;
-            
-            addDiagnostic('Ustawienia załadowane z localStorage');
-            
-            const autoConnect = document.getElementById('autoConnect');
-            if (autoConnect && autoConnect.checked && settings.broker && settings.user) {
-                setTimeout(() => {
-                    addDiagnostic('Automatyczne łączenie...');
-                    connectMQTT();
-                }, 2000);
-            }
-        }
-        
-        // Załaduj ustawienia wyglądu
-        loadAppearanceSettings();
-        
-    } catch (e) {
-        console.error('Błąd ładowania ustawień:', e);
-        addDiagnostic(`Błąd ładowania ustawień: ${e.message}`);
-    }
+    try { const s = JSON.parse(localStorage.getItem('mqttSettings')); if(s) { if(document.getElementById('broker')) document.getElementById('broker').value = s.broker || ''; if(document.getElementById('mqttUser')) document.getElementById('mqttUser').value = s.user || ''; if(document.getElementById('mqttPass')) document.getElementById('mqttPass').value = s.pass || ''; if(document.getElementById('clientId')) document.getElementById('clientId').value = s.clientId || `RAC_Dashboard_${Date.now()}`; if(document.getElementById('keepAlive')) document.getElementById('keepAlive').value = s.keepAlive || '60'; if(document.getElementById('port')) document.getElementById('port').value = s.port || '8884'; if(document.getElementById('protocol')) document.getElementById('protocol').value = s.protocol || 'wss'; if(document.getElementById('useTLS')) document.getElementById('useTLS').checked = s.useTLS !== false; if(document.getElementById('autoConnect')?.checked && s.broker) setTimeout(() => connectMQTT(), 2000); } } catch(e) {}
+    loadAppearanceSettings();
 }
-
-// Zapisz ustawienia
 function saveSettings() {
-    try {
-        const brokerInput = document.getElementById('broker');
-        const userInput = document.getElementById('mqttUser');
-        const passInput = document.getElementById('mqttPass');
-        const clientIdInput = document.getElementById('clientId');
-        const keepAliveInput = document.getElementById('keepAlive');
-        const portSelect = document.getElementById('port');
-        const protocolSelect = document.getElementById('protocol');
-        const useTLSCheckbox = document.getElementById('useTLS');
-        
-        if (!brokerInput || !userInput || !passInput) return;
-        
-        const settings = {
-            broker: brokerInput.value,
-            user: userInput.value,
-            pass: passInput.value,
-            clientId: clientIdInput ? clientIdInput.value : 'M5StickC_Dashboard',
-            keepAlive: keepAliveInput ? keepAliveInput.value : '60',
-            port: portSelect ? portSelect.value : '8884',
-            protocol: protocolSelect ? protocolSelect.value : 'wss',
-            useTLS: useTLSCheckbox ? useTLSCheckbox.checked : true,
-            timestamp: new Date().toISOString()
-        };
-        
-        localStorage.setItem('mqttSettings', JSON.stringify(settings));
-        addDiagnostic('Ustawienia zapisane do localStorage');
-        
-    } catch (e) {
-        console.error('Błąd zapisywania ustawień:', e);
-        addDiagnostic(`Błąd zapisywania ustawień: ${e.message}`);
-    }
+    const s = { broker: document.getElementById('broker')?.value || '', user: document.getElementById('mqttUser')?.value || '', pass: document.getElementById('mqttPass')?.value || '', clientId: document.getElementById('clientId')?.value || 'RAC_Dashboard', keepAlive: document.getElementById('keepAlive')?.value || '60', port: document.getElementById('port')?.value || '8884', protocol: document.getElementById('protocol')?.value || 'wss', useTLS: document.getElementById('useTLS')?.checked || false };
+    localStorage.setItem('mqttSettings', JSON.stringify(s));
 }
-
-// Resetuj ustawienia MQTT
 function resetMQTTSettings() {
-    if (confirm('Czy na pewno chcesz zresetować ustawienia MQTT do wartości domyślnych?')) {
-        localStorage.removeItem('mqttSettings');
-        
-        const brokerInput = document.getElementById('broker');
-        const userInput = document.getElementById('mqttUser');
-        const passInput = document.getElementById('mqttPass');
-        const clientIdInput = document.getElementById('clientId');
-        const keepAliveInput = document.getElementById('keepAlive');
-        const portSelect = document.getElementById('port');
-        const protocolSelect = document.getElementById('protocol');
-        const useTLSCheckbox = document.getElementById('useTLS');
-        
-        if (brokerInput) brokerInput.value = 'wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt';
-        if (userInput) userInput.value = 'pawel22224';
-        if (passInput) passInput.value = 'Klocek12';
-        if (clientIdInput) clientIdInput.value = 'M5StickC_Dashboard';
-        if (keepAliveInput) keepAliveInput.value = '60';
-        if (portSelect) portSelect.value = '8884';
-        if (protocolSelect) protocolSelect.value = 'wss';
-        if (useTLSCheckbox) useTLSCheckbox.checked = true;
-        
-        showSaveMessage('Ustawienia MQTT zostały zresetowane!');
-        addDiagnostic('Ustawienia MQTT zresetowane do wartości domyślnych');
-    }
+    if(confirm('Resetować ustawienia MQTT?')) { localStorage.removeItem('mqttSettings'); if(document.getElementById('broker')) document.getElementById('broker').value = 'wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt'; if(document.getElementById('mqttUser')) document.getElementById('mqttUser').value = ''; if(document.getElementById('mqttPass')) document.getElementById('mqttPass').value = ''; if(document.getElementById('clientId')) document.getElementById('clientId').value = 'RAC_Dashboard'; if(document.getElementById('keepAlive')) document.getElementById('keepAlive').value = '60'; if(document.getElementById('port')) document.getElementById('port').value = '8884'; if(document.getElementById('protocol')) document.getElementById('protocol').value = 'wss'; if(document.getElementById('useTLS')) document.getElementById('useTLS').checked = true; showSaveMessage('Ustawienia zresetowane!'); }
 }
-
-// Połącz z brokerem MQTT
 function connectMQTT() {
-    const brokerInput = document.getElementById('broker');
-    const userInput = document.getElementById('mqttUser');
-    const passInput = document.getElementById('mqttPass');
-    const clientIdInput = document.getElementById('clientId');
-    const keepAliveInput = document.getElementById('keepAlive');
-    const portSelect = document.getElementById('port');
-    const protocolSelect = document.getElementById('protocol');
-    const useTLSCheckbox = document.getElementById('useTLS');
-    
-    if (!brokerInput || !userInput || !passInput) {
-        alert('Nie znaleziono pól konfiguracyjnych MQTT!');
-        return;
-    }
-    
-    let broker = brokerInput.value.trim();
-    const user = userInput.value.trim();
-    const pass = passInput.value.trim();
-    const clientId = clientIdInput ? clientIdInput.value.trim() : `M5StickC_Dashboard_${Date.now()}`;
-    const keepAlive = keepAliveInput ? parseInt(keepAliveInput.value) : 60;
-    const port = portSelect ? portSelect.value : '8884';
-    const protocol = protocolSelect ? protocolSelect.value : 'wss';
-    const useTLS = useTLSCheckbox ? useTLSCheckbox.checked : true;
-    
-    // Wyczyść diagnostykę
-    connectionDiagnostics = [];
-    addDiagnostic('Rozpoczynanie połączenia...');
-    
-    // Jeśli broker nie zawiera protokołu, dodaj go
-    if (!broker.startsWith('ws://') && !broker.startsWith('wss://') && 
-        !broker.startsWith('mqtt://') && !broker.startsWith('mqtts://')) {
-        
-        // Usuń istniejący port jeśli jest w adresie
-        broker = broker.split(':')[0];
-        
-        // Utwórz pełny URL
-        if (protocol === 'wss' || protocol === 'mqtts') {
-            broker = `${protocol}://${broker}:${port}/mqtt`;
-        } else {
-            broker = `${protocol}://${broker}:${port}`;
-        }
-        
-        brokerInput.value = broker;
-        addDiagnostic(`Skonstruowano URL: ${broker}`);
-    }
-    
-    if (!broker) {
-        alert('Proszę wprowadzić adres brokera MQTT!');
-        return;
-    }
-    
-    // Rozłącz istniejące połączenie
-    if (mqttClient && mqttClient.connected) {
-        try {
-            addDiagnostic('Rozłączanie istniejącego połączenia...');
-            mqttClient.end();
-        } catch (e) {
-            console.log('Błąd rozłączania poprzedniego klienta:', e);
-            addDiagnostic(`Błąd rozłączania: ${e.message}`);
-        }
-    }
-    
+    const brokerInp = document.getElementById('broker'), userInp = document.getElementById('mqttUser'), passInp = document.getElementById('mqttPass'), clientIdInp = document.getElementById('clientId'), keepAliveInp = document.getElementById('keepAlive'), portSel = document.getElementById('port'), protocolSel = document.getElementById('protocol'), tlsChk = document.getElementById('useTLS');
+    if(!brokerInp || !userInp || !passInp) return;
+    let broker = brokerInp.value.trim();
+    const user = userInp.value.trim(), pass = passInp.value.trim(), clientId = clientIdInp?.value.trim() || `RAC_Dashboard_${Date.now()}`, keepAlive = parseInt(keepAliveInp?.value) || 60, port = portSel?.value || '8884', protocol = protocolSel?.value || 'wss';
+    if(!broker.startsWith('ws://') && !broker.startsWith('wss://') && !broker.startsWith('mqtt://') && !broker.startsWith('mqtts://')) { broker = broker.split(':')[0]; broker = `${protocol}://${broker}:${port}${(protocol === 'wss' || protocol === 'mqtts') ? '/mqtt' : ''}`; brokerInp.value = broker; }
+    if(!broker) return alert('Wprowadź adres brokera!');
+    if(mqttClient && mqttClient.connected) mqttClient.end();
     updateMQTTStatus('Łączenie...', 'connecting');
     updateGlobalStatus('Łączenie...', 'connecting');
-    addDiagnostic(`Status: Łączenie z ${broker}`);
-    
     try {
-        const options = {
-            username: user,
-            password: pass,
-            clientId: clientId,
-            clean: true,
-            reconnectPeriod: 5000,
-            connectTimeout: 10000,
-            keepalive: keepAlive,
-            rejectUnauthorized: false // Pozwala na samopodpisane certyfikaty
-        };
-        
-        // Dodaj informacje diagnostyczne
-        addDiagnostic(`ID Klienta: ${clientId}`);
-        addDiagnostic(`Keep Alive: ${keepAlive}s`);
-        addDiagnostic(`Użytkownik: ${user}`);
-        addDiagnostic(`TLS: ${useTLS ? 'Tak' : 'Nie'}`);
-        
-        mqttClient = mqtt.connect(broker, options);
-        addDiagnostic('Klient MQTT utworzony, nawiązywanie połączenia...');
-        
-        setupMQTTListeners();
+        mqttClient = mqtt.connect(broker, { username: user, password: pass, clientId, clean: true, reconnectPeriod: 5000, connectTimeout: 10000, keepalive: keepAlive, rejectUnauthorized: false });
+        mqttClient.on('connect', () => { updateMQTTStatus('Połączony', 'connected'); updateGlobalStatus('Online', 'connected'); addMessage('system', 'Połączono z brokerem MQTT'); Object.values(topics).forEach(t => mqttClient.subscribe(t)); mqttClient.subscribe('rac/status/#'); setupAutoRefresh(parseInt(document.getElementById('autoRefresh')?.value) || 0); });
+        mqttClient.on('message', (topic, msg) => { if(!isPaused) { const val = msg.toString(); messageCount++; updateMessageCount(); addMessage(topic, val); processMQTTMessage(topic, val); lastMqttMessageTime = Date.now(); } });
+        mqttClient.on('error', (err) => { updateMQTTStatus('Błąd', 'disconnected'); updateGlobalStatus('Błąd', 'disconnected'); addMessage('error', err.message); });
+        mqttClient.on('close', () => { updateMQTTStatus('Rozłączony', 'disconnected'); updateGlobalStatus('Offline', 'disconnected'); addMessage('system', 'Rozłączono z brokerem MQTT'); if(autoRefreshInterval) clearInterval(autoRefreshInterval); });
+        mqttClient.on('reconnect', () => { updateMQTTStatus('Łączenie...', 'connecting'); updateGlobalStatus('Łączenie...', 'connecting'); });
         saveSettings();
-        
-    } catch (error) {
-        console.error('Błąd połączenia MQTT:', error);
-        updateMQTTStatus('Błąd połączenia', 'disconnected');
-        updateGlobalStatus('Błąd', 'disconnected');
-        addMessage('error', 'Błąd połączenia: ' + error.message);
-        addDiagnostic(`BŁĄD: ${error.message}`);
-        addDiagnostic(`Stack: ${error.stack}`);
-    }
+    } catch(e) { updateMQTTStatus('Błąd', 'disconnected'); addMessage('error', e.message); }
 }
-
-// Ustaw nasłuchiwacze MQTT
-function setupMQTTListeners() {
-    if (!mqttClient) return;
-    
-    mqttClient.on('connect', () => {
-        console.log('✅ Połączono z brokerem MQTT');
-        addDiagnostic('✅ Połączono z brokerem MQTT');
-        updateMQTTStatus('Połączony', 'connected');
-        updateGlobalStatus('Online', 'connected');
-        addMessage('system', 'Połączono z brokerem MQTT');
-        
-        // Subskrybuj tematy
-        Object.values(topics).forEach(topic => {
-            mqttClient.subscribe(topic, { qos: 0 }, (err) => {
-                if (!err) {
-                    console.log(`Subskrybowano temat: ${topic}`);
-                    addDiagnostic(`✓ Subskrybowano: ${topic}`);
-                    topicSet.add(topic);
-                    updateTopicCount();
-                } else {
-                    console.error('Błąd subskrypcji:', err);
-                    addDiagnostic(`✗ Błąd subskrypcji ${topic}: ${err.message}`);
-                }
-            });
-        });
-        
-        // Ustaw automatyczne odświeżanie
-        setupAutoRefresh(10);
-        
-        // Rozpocznij symulację danych testowych
-        startTestDataSimulation();
-    });
-    
-    mqttClient.on('message', (topic, message) => {
-        if (isPaused) return;
-        
-        const value = message.toString();
-        messageCount++;
-        updateMessageCount();
-        addMessage(topic, value);
-        processMQTTMessage(topic, value);
-        
-        // Dodaj diagnostykę dla pierwszej wiadomości
-        if (messageCount === 1) {
-            addDiagnostic(`📨 Pierwsza wiadomość: ${topic} = ${value}`);
-        }
-    });
-    
-    mqttClient.on('error', (err) => {
-        console.error('❌ Błąd MQTT:', err);
-        addDiagnostic(`❌ Błąd MQTT: ${err.message}`);
-        updateMQTTStatus('Błąd: ' + err.message, 'disconnected');
-        updateGlobalStatus('Błąd', 'disconnected');
-        addMessage('error', 'Błąd MQTT: ' + err.message);
-    });
-    
-    mqttClient.on('close', () => {
-        console.log('🔌 Rozłączono z brokerem MQTT');
-        addDiagnostic('🔌 Rozłączono z brokerem MQTT');
-        updateMQTTStatus('Rozłączony', 'disconnected');
-        updateGlobalStatus('Offline', 'disconnected');
-        addMessage('system', 'Rozłączono z brokerem MQTT');
-        
-        // Wyczyść interwały
-        if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-        if (testDataInterval) clearInterval(testDataInterval);
-    });
-    
-    mqttClient.on('reconnect', () => {
-        console.log('🔄 Ponowne łączenie...');
-        addDiagnostic('🔄 Ponowne łączenie...');
-        updateMQTTStatus('Łączenie...', 'connecting');
-        updateGlobalStatus('Łączenie...', 'connecting');
-    });
-    
-    mqttClient.on('offline', () => {
-        console.log('📴 Klient offline');
-        addDiagnostic('📴 Klient offline');
-        updateMQTTStatus('Offline', 'disconnected');
-        updateGlobalStatus('Offline', 'disconnected');
-    });
-    
-    mqttClient.on('end', () => {
-        console.log('🔚 Połączenie zakończone');
-        addDiagnostic('🔚 Połączenie zakończone');
-    });
-}
-
-// Rozpocznij symulację danych testowych
-function startTestDataSimulation() {
-    if (testDataInterval) clearInterval(testDataInterval);
-    
-    testDataInterval = setInterval(() => {
-        if (mqttClient && mqttClient.connected) {
-            sendTestData();
-        }
-    }, 3000); // Co 3 sekundy
-}
-
-// Przetwarzanie wiadomości MQTT - POPRAWIONE
-function processMQTTMessage(topic, value) {
-    try {
-        // Sprawdź czy wartość jest poprawna
-        if (!value || value.trim() === '') {
-            console.warn('Otrzymano pustą wartość dla tematu:', topic);
-            return;
-        }
-        
-        // Mapowanie tematów do wykresów i datasetów
-        const chartMapping = {
-            [topics.temp_room]: { chart: 'indoor', dataset: 0, tile: 'temp_room' },
-            [topics.temp_pipe]: { chart: 'indoor', dataset: 1, tile: 'temp_pipe' },
-            [topics.temp_set]: { chart: 'indoor', dataset: 2, tile: 'temp_set' },
-            [topics.temp_module]: { chart: 'outdoor', dataset: 0, tile: 'temp_module' },
-            [topics.temp_outside]: { chart: 'outdoor', dataset: 1, tile: 'temp_outside' },
-            [topics.temp_exchanger]: { chart: 'outdoor', dataset: 2, tile: 'temp_exchanger' },
-            [topics.temp_discharge]: { chart: 'outdoor', dataset: 3, tile: 'temp_discharge' },
-            [topics.current_a]: { chart: 'current', dataset: 0, tile: 'current' },
-            [topics.compressor]: { chart: 'compressor', dataset: 0, tile: 'compressor' },
-            [topics.fan_rpm]: { chart: 'fan', dataset: 0, tile: 'fan_rpm' },
-            [topics.mode]: { chart: null, dataset: null, tile: 'mode' },
-            [topics.fan_text]: { chart: null, dataset: null, tile: 'fan_text' }
-        };
-        
-        const mapping = chartMapping[topic];
-        if (!mapping) {
-            console.warn('Nieznany temat:', topic);
-            return;
-        }
-        
-        // Aktualizuj kafelek
-        updateTile(mapping.tile, value);
-        
-        // Aktualizuj wykres jeśli jest przypisany
-        if (mapping.chart && charts[mapping.chart]) {
-            updateChart(charts[mapping.chart], value, mapping.dataset);
-        }
-        
-    } catch (error) {
-        console.error('Błąd przetwarzania wiadomości:', error);
-        console.error('Temat:', topic);
-        console.error('Wartość:', value);
-        addMessage('error', 'Błąd parsowania: ' + value);
-    }
-}
-
-// Wyślij dane testowe - POPRAWIONE
-function sendTestData() {
-    if (!mqttClient || !mqttClient.connected) {
-        console.warn('Nie można wysłać danych testowych - brak połączenia MQTT');
-        return;
-    }
-    
-    const now = new Date();
-    const second = now.getSeconds();
-    
-    // Proste liniowe zmiany dla łatwiejszego debugowania
-    const baseValue = second;
-    
-    const testData = {
-        [topics.temp_room]: (20 + (baseValue % 5)).toFixed(1),
-        [topics.temp_pipe]: (18 + (baseValue % 4)).toFixed(1),
-        [topics.temp_set]: '22.0',
-        [topics.temp_outside]: (15 + (baseValue % 8)).toFixed(1),
-        [topics.compressor]: (40 + (baseValue % 15)).toString(),
-        [topics.fan_rpm]: (800 + (baseValue % 200)).toString(),
-        [topics.current_a]: (2.0 + (baseValue % 1.5)).toFixed(2),
-        [topics.temp_module]: (30 + (baseValue % 10)).toFixed(1),
-        [topics.temp_exchanger]: (35 + (baseValue % 12)).toFixed(1),
-        [topics.temp_discharge]: (50 + (baseValue % 15)).toFixed(1),
-        [topics.mode]: 'Auto',
-        [topics.fan_text]: 'Średni'
+function processMQTTMessage(topic, val) {
+    const map = {
+        [topics.temp_room]: { chart: 'indoor', ds: 0, tile: 'temp_room' }, [topics.temp_pipe]: { chart: 'indoor', ds: 1, tile: 'temp_pipe' }, [topics.temp_set]: { chart: 'indoor', ds: 2, tile: 'temp_set' },
+        [topics.temp_module]: { chart: 'outdoor', ds: 0, tile: 'temp_module' }, [topics.temp_outside]: { chart: 'outdoor', ds: 1, tile: 'temp_outside' }, [topics.temp_exchanger]: { chart: 'outdoor', ds: 2, tile: 'temp_exchanger' }, [topics.temp_discharge]: { chart: 'outdoor', ds: 3, tile: 'temp_discharge' },
+        [topics.current_a]: { chart: 'current', ds: 0, tile: 'current' }, [topics.compressor]: { chart: 'compressor', ds: 0, tile: 'compressor' }, [topics.fan_rpm]: { chart: 'fan', ds: 0, tile: 'fan_rpm' },
+        [topics.mode]: { tile: 'mode' }, [topics.fan_speed]: { tile: 'fan_speed' }
     };
-    
-    Object.entries(testData).forEach(([topic, value]) => {
-        mqttClient.publish(topic, value);
-    });
-    
-    console.log('Wysłano dane testowe o', now.toLocaleTimeString());
+    const m = map[topic];
+    if(!m) return;
+    updateTile(m.tile, val);
+    if(m.chart && charts[m.chart]) updateChart(charts[m.chart], val, m.ds);
+    if(topic === topics.temp_room || topic === topics.compressor) { if(window.histTimeout) clearTimeout(window.histTimeout); window.histTimeout = setTimeout(() => { saveToHistory(); if(document.getElementById('history')?.classList.contains('active')) loadHistoryData(); }, 500); }
 }
-
-// Rozłącz z brokerem MQTT
-function disconnectMQTT() {
-    if (mqttClient && mqttClient.connected) {
-        mqttClient.end();
-        updateMQTTStatus('Rozłączony', 'disconnected');
-        updateGlobalStatus('Offline', 'disconnected');
-        addMessage('system', 'Rozłączono ręcznie');
-    }
+function disconnectMQTT() { if(mqttClient && mqttClient.connected) mqttClient.end(); }
+function addMessage(topic, val) {
+    if(isPaused) return;
+    const cont = document.getElementById('mqttMessages');
+    if(!cont) return;
+    if(cont.querySelector('.empty-messages')) cont.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'message-item';
+    div.innerHTML = `<span class="message-time">${new Date().toLocaleTimeString('pl-PL')}</span><span class="message-topic">${topic}</span><span class="message-value"> = ${val}</span>`;
+    cont.prepend(div);
+    while(cont.children.length > maxMessages) cont.removeChild(cont.lastChild);
 }
-
-// Dodaj wiadomość do monitora
-function addMessage(topic, value) {
-    if (isPaused) return;
-    
-    const messagesContainer = document.getElementById('mqttMessages');
-    if (!messagesContainer) return;
-    
-    const emptyMessages = messagesContainer.querySelector('.empty-messages');
-    
-    if (emptyMessages) {
-        emptyMessages.remove();
-    }
-    
-    const messageEl = document.createElement('div');
-    messageEl.className = 'message-item';
-    messageEl.innerHTML = `
-        <span class="message-time">${new Date().toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</span>
-        <span class="message-topic">${topic}</span>
-        <span class="message-value"> = ${value}</span>
-    `;
-    
-    messagesContainer.prepend(messageEl);
-    
-    const messages = messagesContainer.querySelectorAll('.message-item');
-    if (messages.length > maxMessages) {
-        messages[messages.length - 1].remove();
-    }
-}
-
-// Wyczyść wiadomości
-function clearMessages() {
-    const messagesContainer = document.getElementById('mqttMessages');
-    if (!messagesContainer) return;
-    
-    messagesContainer.innerHTML = `
-        <div class="empty-messages">
-            <i class="fas fa-comment-slash"></i>
-            <p>Brak wiadomości. Połącz się z brokerem, aby zobaczyć dane.</p>
-        </div>
-    `;
-    messageCount = 0;
-    updateMessageCount();
-}
-
-// Wstrzymaj/wznów wiadomości
-function togglePauseMessages() {
-    isPaused = !isPaused;
-    const pauseBtn = document.getElementById('pauseMessages');
-    if (!pauseBtn) return;
-    
-    const icon = pauseBtn.querySelector('i');
-    
-    if (isPaused) {
-        icon.className = 'fas fa-play';
-        pauseBtn.innerHTML = '<i class="fas fa-play"></i> Wznów';
-        addMessage('system', 'Monitor wiadomości wstrzymany');
-    } else {
-        icon.className = 'fas fa-pause';
-        pauseBtn.innerHTML = '<i class="fas fa-pause"></i> Wstrzymaj';
-        addMessage('system', 'Monitor wiadomości wznowiony');
-    }
-}
-
-// Aktualizuj status MQTT
-function updateMQTTStatus(text, status) {
-    const statusEl = document.getElementById('mqttStatus');
-    if (!statusEl) return;
-    
-    const indicator = statusEl.querySelector('.status-indicator');
-    const textEl = statusEl.querySelector('.status-text');
-    
-    if (indicator) indicator.className = `status-indicator ${status}`;
-    if (textEl) textEl.textContent = text;
-}
-
-// Aktualizuj globalny status
-function updateGlobalStatus(text, status) {
-    const statusEl = document.getElementById('globalStatus');
-    if (!statusEl) return;
-    
-    const indicator = statusEl.querySelector('.status-indicator');
-    const textEl = statusEl.querySelector('.status-text');
-    
-    if (indicator) indicator.className = `status-indicator ${status}`;
-    if (textEl) textEl.textContent = text;
-}
-
-// Aktualizuj licznik wiadomości
-function updateMessageCount() {
-    const messageCountEl = document.getElementById('messageCount');
-    if (messageCountEl) {
-        messageCountEl.textContent = messageCount;
-    }
-}
-
-// Aktualizuj licznik tematów
-function updateTopicCount() {
-    const topicCountEl = document.getElementById('topicCount');
-    if (topicCountEl) {
-        topicCountEl.textContent = topicSet.size;
-    }
-}
-
-// Odśwież dane
+function clearMessages() { const c = document.getElementById('mqttMessages'); if(c) c.innerHTML = '<div class="empty-messages" style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fas fa-comment-slash" style="font-size:2rem"></i><p>Brak wiadomości. Połącz się z brokerem.</p></div>'; messageCount = 0; updateMessageCount(); }
+function togglePauseMessages() { isPaused = !isPaused; const b = document.getElementById('pauseMessages'); if(b) b.innerHTML = isPaused ? '<i class="fas fa-play"></i> Wznów' : '<i class="fas fa-pause"></i> Wstrzymaj'; addMessage('system', isPaused ? 'Monitor wstrzymany' : 'Monitor wznowiony'); }
+function updateMQTTStatus(txt, st) { const s = document.getElementById('mqttStatus'); if(s) { const i = s.querySelector('.status-indicator'), t = s.querySelector('.status-text'); if(i) i.className = `status-indicator ${st}`; if(t) t.textContent = txt; } }
+function updateGlobalStatus(txt, st) { const s = document.getElementById('globalStatus'); if(s) { const i = s.querySelector('.status-indicator'), t = s.querySelector('.status-text'); if(i) i.className = `status-indicator ${st}`; if(t) t.textContent = txt; } }
+function updateMessageCount() { const e = document.getElementById('messageCount'); if(e) e.textContent = messageCount; }
+function updateTopicCount() { const e = document.getElementById('topicCount'); if(e) e.textContent = topicSet.size; }
 function refreshData() {
-    if (mqttClient && mqttClient.connected) {
-        mqttClient.publish('m5stick/command/refresh', '1');
-        addMessage('command', 'Wysłano żądanie odświeżenia');
-        
-        Object.keys(lastValues).forEach(id => {
-            const value = lastValues[id];
-            if (value && Date.now() - value.timestamp < 60000) {
-                updateTile(id, value.value);
-            }
-        });
-        
-        const refreshBtn = document.getElementById('refreshBtn');
-        if (refreshBtn) {
-            refreshBtn.classList.add('refreshing');
-            setTimeout(() => refreshBtn.classList.remove('refreshing'), 500);
-        }
-    } else {
-        alert('Nie jesteś połączony z brokerem MQTT!');
-    }
+    if(mqttClient && mqttClient.connected) { addMessage('command', 'Odświeżanie danych'); Object.keys(lastValues).forEach(id => { const v = lastValues[id]; if(v && Date.now() - v.timestamp < 60000) updateTile(id, v.value); }); const b = document.getElementById('refreshBtn'); if(b) { b.classList.add('refreshing'); setTimeout(() => b.classList.remove('refreshing'), 500); } } else alert('Brak połączenia MQTT!');
+}
+function clearCharts() { if(confirm('Wyczyścić wszystkie wykresy?')) { Object.values(charts).forEach(c => { if(c) { c.data.labels = []; c.data.datasets.forEach(ds => ds.data = []); c.update(); } }); addMessage('system', 'Wykresy wyczyszczone'); } }
+function setupAutoRefresh(sec) { if(autoRefreshInterval) clearInterval(autoRefreshInterval); if(sec > 0) { localStorage.setItem('autoRefresh', sec); autoRefreshInterval = setInterval(() => { if(mqttClient && mqttClient.connected) refreshData(); }, sec * 1000); } else localStorage.setItem('autoRefresh', '0'); }
+function showTab(id) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.menu-item').forEach(b => b.classList.remove('active'));
+    document.getElementById(id)?.classList.add('active');
+    document.querySelectorAll('.menu-item').forEach(b => { if(b.onclick && b.onclick.toString().includes(`'${id}'`)) b.classList.add('active'); });
+    const titles = { home: 'Dashboard Systemu', charts: 'Wykresy Historyczne', mqtt: 'Konfiguracja MQTT', history: 'Historia Danych', settings: 'Ustawienia Aplikacji' };
+    const pt = document.getElementById('pageTitle'); if(pt && titles[id]) pt.textContent = titles[id];
+    if(id === 'charts') setTimeout(() => { Object.values(charts).forEach(c => { if(c) { try { c.resize(); c.update(); } catch(e) {} } }); }, 100);
+    if(id === 'history') loadHistoryData();
+}
+function showSettingsTab(tab) {
+    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.settings-nav-item').forEach(b => b.classList.remove('active'));
+    document.getElementById(`settings${tab.charAt(0).toUpperCase() + tab.slice(1)}`)?.classList.add('active');
+    document.querySelector(`.settings-nav-item[data-tab="${tab}"]`)?.classList.add('active');
 }
 
-// Wyczyść wykresy
-function clearCharts() {
-    if (confirm('Czy na pewno chcesz wyczyścić wszystkie wykresy?')) {
-        Object.values(charts).forEach(chart => {
-            if (chart) {
-                chart.data.labels = [];
-                chart.data.datasets.forEach(dataset => dataset.data = []);
-                chart.update();
-            }
-        });
-        addMessage('system', 'Wykresy zostały wyczyszczone');
-    }
-}
-
-// Ustaw automatyczne odświeżanie
-function setupAutoRefresh(intervalSeconds) {
-    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    
-    if (intervalSeconds > 0) {
-        autoRefreshInterval = setInterval(() => {
-            if (mqttClient && mqttClient.connected) {
-                const randomTemp = (21 + Math.random() * 2).toFixed(1);
-                mqttClient.publish(topics.temp_room, randomTemp);
-            }
-        }, intervalSeconds * 1000);
-    }
-}
-
-// Załaduj dane historyczne
-function loadHistoryData() {
-    const tableBody = document.getElementById('historyTableBody');
-    if (!tableBody) return;
-    
-    const now = new Date();
-    const historyData = [];
-    
-    for (let i = 0; i < 10; i++) {
-        const date = new Date(now.getTime() - i * 3600000);
-        historyData.push({
-            time: date.toLocaleString('pl-PL'),
-            tempRoom: (21 + Math.random() * 3).toFixed(1),
-            tempOutside: (15 + Math.random() * 8).toFixed(1),
-            current: (2.5 + Math.random() * 1.5).toFixed(2),
-            mode: ['Chłodzenie', 'Ogrzewanie', 'Auto'][Math.floor(Math.random() * 3)],
-            status: Math.random() > 0.5 ? 'Aktywny' : 'Nieaktywny'
-        });
-    }
-    
-    tableBody.innerHTML = '';
-    historyData.forEach(data => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${data.time}</td>
-            <td>${data.tempRoom}°C</td>
-            <td>${data.tempOutside}°C</td>
-            <td>${data.current} A</td>
-            <td>${data.mode}</td>
-            <td><span class="status-badge ${data.status === 'Aktywny' ? 'active' : ''}">${data.status}</span></td>
-        `;
-        tableBody.appendChild(row);
-    });
-    
-    addMessage('history', 'Załadowano dane historyczne');
-}
-
-// Przełączanie zakładek
-function showTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    document.querySelectorAll('.menu-item').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    const selectedTab = document.getElementById(tabId);
-    if (selectedTab) {
-        selectedTab.classList.add('active');
-    }
-    
-    document.querySelectorAll('.menu-item').forEach(btn => {
-        if (btn.onclick && btn.onclick.toString().includes(`'${tabId}'`)) {
-            btn.classList.add('active');
-        }
-    });
-    
-    const titles = {
-        'home': 'Dashboard Systemu',
-        'charts': 'Wykresy Historyczne',
-        'mqtt': 'Konfiguracja MQTT',
-        'history': 'Historia Danych',
-        'settings': 'Ustawienia Aplikacji'
-    };
-    
-    const pageTitle = document.getElementById('pageTitle');
-    if (pageTitle && titles[tabId]) {
-        pageTitle.textContent = titles[tabId];
-    }
-    
-    if (tabId === 'charts') {
-        setTimeout(() => {
-            Object.values(charts).forEach(chart => {
-                if (chart) {
-                    try {
-                        chart.resize();
-                        chart.update();
-                    } catch (error) {
-                        console.error('Błąd aktualizacji wykresu:', error);
-                    }
-                }
-            });
-        }, 100);
-    }
-    
-    console.log(`Przełączono na zakładkę: ${tabId}`);
-}
-
-// Przełączanie zakładek ustawień
-function showSettingsTab(tabId) {
-    document.querySelectorAll('.settings-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    document.querySelectorAll('.settings-nav-item').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    const tabElement = document.getElementById(`settings${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`);
-    if (tabElement) {
-        tabElement.classList.add('active');
-    }
-    
-    const navButton = document.querySelector(`.settings-nav-item[data-tab="${tabId}"]`);
-    if (navButton) {
-        navButton.classList.add('active');
-    }
-    
-    // Ukryj przycisk zapisu jeśli przechodzimy na inną zakładkę niż wygląd
-    if (tabId !== 'appearance') {
-        const saveBtn = document.getElementById('saveAppearance');
-        if (saveBtn) {
-            saveBtn.style.display = 'none';
-        }
-    }
-}
-
-// Dodaj style CSS dla animacji
-const style = document.createElement('style');
-style.textContent = `
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-    20%, 40%, 60%, 80% { transform: translateX(5px); }
-}
-
-.shake {
-    animation: shake 0.5s ease-in-out;
-}
-
-.status-indicator.connecting {
-    animation: pulseStatus 1.5s infinite;
-}
-
-@keyframes pulseStatus {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-.btn-refresh.refreshing i {
-    animation: spin 0.5s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-@keyframes highlight {
-    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-}
-
-.tile.updated {
-    animation: highlight 1s ease;
-}
-
-@keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
-}
-`;
-document.head.appendChild(style);
-
-// Eksportuj funkcje do globalnego scope
 window.showTab = showTab;
 window.logout = logout;
 window.showSettingsTab = showSettingsTab;
-
-console.log('Aplikacja M5StickC Dashboard zainicjalizowana pomyślnie');
