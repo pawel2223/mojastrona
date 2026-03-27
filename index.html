@@ -3,557 +3,990 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M5StickC — Dashboard Klimatyzacji</title>
-    <link rel="stylesheet" href="style.css">
+    <title>RAC Dashboard — System Monitoringu Klimatyzacji</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0a0e1a;
+            --secondary: #111827;
+            --accent: #3b82f6;
+            --accent-light: #60a5fa;
+            --accent-dark: #1d4ed8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --card-bg: rgba(17, 24, 39, 0.8);
+            --border-color: rgba(59, 130, 246, 0.2);
+            --gradient-dark: linear-gradient(135deg, #0a0e1a 0%, #111827 100%);
+            --gradient-card: linear-gradient(145deg, rgba(17, 24, 39, 0.9) 0%, rgba(10, 14, 26, 0.9) 100%);
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --border-radius: 16px;
+            --border-radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.light-theme {
+            --primary: #f8fafc;
+            --secondary: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --border-color: rgba(59, 130, 246, 0.3);
+            --gradient-dark: linear-gradient(135deg, #f1f5f9 0%, #ffffff 100%);
+            --gradient-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(59, 130, 246, 0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 10px; }
+
+        /* Login Screen */
+        .login-screen {
+            min-height: 100vh;
+            background: var(--gradient-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+        }
+        
+        .login-screen::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        .login-container {
+            width: 100%;
+            max-width: 440px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .login-header { text-align: center; margin-bottom: 32px; }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-size: 2.5rem;
+            color: var(--accent-light);
+            margin-bottom: 20px;
+        }
+        
+        .logo i { animation: float 3s ease-in-out infinite; }
+        
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        
+        .logo-text { font-weight: 800; font-size: 2rem; letter-spacing: -0.5px; }
+        .logo-accent { color: var(--accent); }
+        
+        .login-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-light), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        
+        .login-subtitle { color: var(--text-muted); font-size: 0.95rem; }
+        
+        .login-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 32px;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .input-group { margin-bottom: 20px; }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        
+        .password-wrapper { position: relative; }
+        
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+        }
+        
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition);
+            margin-bottom: 16px;
+        }
+        
+        .btn-login:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        
+        .error-message {
+            margin-bottom: 16px;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--border-radius-sm);
+            color: var(--danger);
+            text-align: center;
+            font-size: 0.875rem;
+            display: none;
+        }
+        
+        .login-hint {
+            padding: 12px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: var(--border-radius-sm);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+        
+        .login-footer { text-align: center; color: var(--text-muted); margin-top: 24px; font-size: 0.8rem; }
+
+        /* Main App */
+        .app-container { min-height: 100vh; display: flex; }
+        
+        .sidebar {
+            width: 280px;
+            background: var(--card-bg);
+            backdrop-filter: blur(8px);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-header {
+            padding: 28px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .app-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .app-logo i { font-size: 2rem; color: var(--accent); }
+        .logo-main { font-size: 1.25rem; font-weight: 700; }
+        .logo-sub { font-size: 0.75rem; color: var(--text-muted); }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: var(--border-radius-sm);
+            font-size: 0.875rem;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .status-indicator.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .status-indicator.disconnected { background: var(--danger); }
+        .status-indicator.connecting { background: var(--warning); animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .sidebar-menu {
+            flex: 1;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        
+        .menu-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-light);
+        }
+        
+        .menu-item.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+            border-left: 3px solid var(--accent);
+        }
+        
+        .menu-item i { width: 20px; text-align: center; }
+        
+        .sidebar-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .btn-logout {
+            width: 100%;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition);
+            margin-bottom: 16px;
+        }
+        
+        .btn-logout:hover { background: rgba(239, 68, 68, 0.2); transform: translateY(-2px); }
+        
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+        }
+        .user-name { display: block; font-weight: 600; font-size: 0.9rem; }
+        .user-role { font-size: 0.7rem; color: var(--text-muted); }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .main-header {
+            padding: 20px 32px;
+            background: var(--card-bg);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+        .breadcrumbs { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 0.8rem; }
+        .breadcrumb-item.active { color: var(--accent); }
+        
+        .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        
+        .time-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+        
+        .btn-refresh, .btn-reset {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .btn-refresh {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: white;
+        }
+        
+        .btn-reset {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        
+        .btn-refresh:hover, .btn-reset:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+        
+        .content-wrapper {
+            flex: 1;
+            padding: 24px 32px;
+            overflow-y: auto;
+        }
+        
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            margin-bottom: 24px;
+            transition: var(--transition);
+        }
+        
+        .card:hover { box-shadow: var(--shadow-md); }
+        
+        .card-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .card-header h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .card-body { padding: 24px; }
+        
+        /* Tiles Grid */
+        .dashboard-grid { display: grid; gap: 24px; }
+        .odu-grid, .idu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        
+        .tile {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            padding: 16px;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .tile::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-light));
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+        
+        .tile.updated::before { transform: scaleX(1); animation: tileFlash 0.6s ease; }
+        @keyframes tileFlash { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .tile:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow-sm); }
+        
+        .tile-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        
+        .tile-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .tile-value {
+            font-size: 2rem;
+            font-weight: 800;
+            text-align: center;
+            margin: 12px 0;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .tile-unit {
+            font-size: 0.85rem;
+            color: var(--accent-light);
+            text-align: center;
+        }
+        
+        .tile-footer {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .tile-updated { font-size: 0.7rem; color: var(--text-muted); text-align: right; }
+        
+        .tile-trend {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+        
+        .tile-trend.up { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .tile-trend.down { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+        /* Charts */
+        .charts-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .section-description { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
+        
+        .global-chart-legend {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            margin-bottom: 24px;
+        }
+        
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 12px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        
+        @media (max-width: 1200px) { .charts-grid { grid-template-columns: 1fr; } }
+        
+        .chart-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            transition: var(--transition);
+        }
+        
+        .chart-container.large { grid-column: span 2; }
+        @media (max-width: 1200px) { .chart-container.large { grid-column: span 1; } }
+        
+        .chart-container:hover { box-shadow: var(--shadow-md); }
+        
+        .chart-header { margin-bottom: 16px; }
+        .chart-header h3 { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .chart-wrapper { height: 280px; position: relative; }
+        
+        .range-select {
+            padding: 8px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            color: var(--text-primary);
+        }
+        
+        .btn-primary, .btn-secondary {
+            padding: 8px 20px;
+            border-radius: var(--border-radius-sm);
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: rgba(15, 23, 42, 0.6);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-primary:hover, .btn-secondary:hover { transform: translateY(-2px); }
+
+        /* MQTT */
+        .mqtt-config-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+        
+        .config-section {
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .config-section:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+        
+        .config-section h3 { font-size: 1.1rem; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+        
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.85rem; font-weight: 500; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            color: var(--text-primary);
+        }
+        
+        .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        @media (max-width: 768px) { .form-row { grid-template-columns: 1fr; } }
+        
+        .form-check { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .config-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
+        
+        .status-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: var(--border-radius-sm);
+        }
+        
+        .mqtt-monitor {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+        
+        .monitor-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .message-list {
+            height: 280px;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        .message-item {
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: var(--border-radius-sm);
+            border-left: 3px solid var(--accent);
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+        
+        .message-time { color: var(--text-muted); margin-right: 12px; }
+        .message-topic { color: var(--accent); font-weight: 500; margin-right: 8px; }
+        
+        .monitor-controls { padding: 16px 20px; display: flex; gap: 12px; border-top: 1px solid var(--border-color); }
+
+        /* History Table */
+        .history-filters {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+            align-items: flex-end;
+        }
+        
+        .filter-group { display: flex; flex-direction: column; gap: 6px; }
+        .filter-group label { font-size: 0.75rem; color: var(--text-muted); }
+        .filter-select {
+            padding: 8px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            color: var(--text-primary);
+        }
+        
+        .history-table-container {
+            overflow-x: auto;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+        }
+        
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        .history-table th {
+            padding: 14px 16px;
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.5);
+        }
+        
+        .history-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .history-table tr:hover { background: rgba(59, 130, 246, 0.05); }
+
+        /* Settings */
+        .settings-container { display: grid; grid-template-columns: 240px 1fr; gap: 32px; }
+        @media (max-width: 992px) { .settings-container { grid-template-columns: 1fr; } }
+        
+        .settings-nav { display: flex; flex-direction: column; gap: 4px; }
+        .settings-nav-item {
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: var(--transition);
+        }
+        
+        .settings-nav-item:hover { background: rgba(59, 130, 246, 0.1); }
+        .settings-nav-item.active { background: rgba(59, 130, 246, 0.15); color: var(--accent); border-left: 3px solid var(--accent); }
+        
+        .settings-tab { display: none; }
+        .settings-tab.active { display: block; }
+        
+        .settings-group {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 24px;
+        }
+        
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .setting-item label { font-weight: 500; min-width: 180px; }
+        .setting-select {
+            padding: 8px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            color: var(--text-primary);
+            min-width: 180px;
+        }
+        
+        .settings-actions { margin-top: 20px; display: flex; justify-content: flex-end; }
+        
+        .about-container { text-align: center; padding: 32px; }
+        .about-logo i { font-size: 3rem; color: var(--accent); margin-bottom: 16px; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 32px;
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        .modal-buttons { display: flex; gap: 16px; justify-content: center; margin-top: 24px; }
+        
+        .save-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: var(--border-radius-sm);
+            z-index: 10000;
+            animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+            font-weight: 500;
+        }
+        
+        .save-message.success { background: var(--success); color: white; }
+        .save-message.error { background: var(--danger); color: white; }
+        
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        
+        .btn-refresh.refreshing i { animation: spin 0.5s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; left: -280px; top: 0; bottom: 0; transition: left 0.3s; z-index: 1000; }
+            .main-header { flex-direction: column; align-items: flex-start; }
+            .header-right { width: 100%; justify-content: space-between; }
+            .content-wrapper { padding: 16px; }
+            .odu-grid, .idu-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-    <!-- Login Screen -->
     <div id="login-screen" class="login-screen">
         <div class="login-container">
             <div class="login-header">
-                <div class="logo">
-                    <i class="fas fa-cloud-sun"></i>
-                    <span class="logo-text">GREE<span class="logo-accent">Cloud</span></span>
-                </div>
-                <h1 class="login-title">Dashboard Klimatyzacji</h1>
+                <div class="logo"><i class="fas fa-cloud-sun"></i><span class="logo-text">RAC<span class="logo-accent">Monitor</span></span></div>
+                <h1 class="login-title">System Monitoringu Klimatyzacji</h1>
                 <p class="login-subtitle">Monitoruj jednostki wewnętrzne i zewnętrzne w czasie rzeczywistym</p>
             </div>
-            
             <div class="login-card">
-                <div class="card-header">
-                    <h2><i class="fas fa-user-shield"></i> Logowanie</h2>
-                </div>
+                <div class="card-header"><h2><i class="fas fa-user-shield"></i> Logowanie</h2></div>
                 <div class="card-body">
-                    <div class="input-group">
-                        <label for="login"><i class="fas fa-user"></i> Nazwa użytkownika</label>
-                        <input type="text" id="login" placeholder="Wprowadź login" value="" autocomplete="">
-                    </div>
-                    <div class="input-group">
-                        <label for="password"><i class="fas fa-key"></i> Hasło</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="password" placeholder="Wprowadź hasło" value="" autocomplete="current-password">
-                            <button type="button" class="password-toggle" id="loginTogglePw">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <!-- Komunikat błędu - poprawione miejsce -->
-                    <button id="btnLogin" class="btn-login">
-                        <i class="fas fa-sign-in-alt"></i> Zaloguj się
-                    </button>
-                    <div id="login-msg" class="error-message" style="display: none;"></div>
-                    <div class="login-hint">
-                        <i class="fas fa-info-circle"></i> Podaj login i hasło
-                    </div>
+                    <div class="input-group"><label><i class="fas fa-user"></i> Nazwa użytkownika</label><input type="text" id="login" placeholder="Wprowadź login"></div>
+                    <div class="input-group"><label><i class="fas fa-key"></i> Hasło</label><div class="password-wrapper"><input type="password" id="password" placeholder="Wprowadź hasło"><button type="button" class="password-toggle" id="loginTogglePw"><i class="fas fa-eye"></i></button></div></div>
+                    <button id="btnLogin" class="btn-login"><i class="fas fa-sign-in-alt"></i> Zaloguj się</button>
+                    <div id="login-msg" class="error-message"></div>
+                    <div class="login-hint"><i class="fas fa-info-circle"></i> Dane logowania: admin / admin</div>
                 </div>
             </div>
-            
-            <div class="login-footer">
-                <p class="footer-text">
-                    <i class="fas fa-microchip"></i> Kompatybilne z M5StickC • 
-                    <i class="fas fa-chart-line"></i> Monitoring w czasie rzeczywistym • 
-                    <i class="fas fa-mobile-alt"></i> Responsywny design
-                </p>
-            </div>
+            <div class="login-footer"><p><i class="fas fa-microchip"></i> Kompatybilne z ESP32 • <i class="fas fa-chart-line"></i> Monitoring w czasie rzeczywistym</p></div>
         </div>
     </div>
 
-    <!-- Main App (hidden initially) -->
     <div id="app" class="app-container" style="display: none;">
-        <!-- Sidebar Navigation -->
         <nav class="sidebar">
             <div class="sidebar-header">
-                <div class="app-logo">
-                    <i class="fas fa-snowflake"></i>
-                    <div class="logo-text">
-                        <span class="logo-main">M5StickC</span>
-                        <span class="logo-sub">Dashboard</span>
-                    </div>
-                </div>
-                <div class="connection-status" id="globalStatus">
-                    <div class="status-indicator disconnected"></div>
-                    <span class="status-text">Brak połączenia</span>
-                </div>
+                <div class="app-logo"><i class="fas fa-snowflake"></i><div><div class="logo-main">RAC Monitor</div><div class="logo-sub">ESP32 Dashboard</div></div></div>
+                <div class="connection-status" id="globalStatus"><div class="status-indicator disconnected"></div><span class="status-text">Brak połączenia</span></div>
             </div>
-            
             <div class="sidebar-menu">
-                <button class="menu-item active" onclick="showTab('home')">
-                    <i class="fas fa-home"></i>
-                    <span class="menu-text">Dashboard</span>
-                </button>
-                <button class="menu-item" onclick="showTab('charts')">
-                    <i class="fas fa-chart-line"></i>
-                    <span class="menu-text">Wykresy</span>
-                </button>
-                <button class="menu-item" onclick="showTab('mqtt')">
-                    <i class="fas fa-wifi"></i>
-                    <span class="menu-text">MQTT</span>
-                </button>
-                <button class="menu-item" onclick="showTab('history')">
-                    <i class="fas fa-history"></i>
-                    <span class="menu-text">Historia</span>
-                </button>
-                <button class="menu-item" onclick="showTab('settings')">
-                    <i class="fas fa-cog"></i>
-                    <span class="menu-text">Ustawienia</span>
-                </button>
+                <button class="menu-item active" onclick="showTab('home')"><i class="fas fa-home"></i><span>Dashboard</span></button>
+                <button class="menu-item" onclick="showTab('charts')"><i class="fas fa-chart-line"></i><span>Wykresy</span></button>
+                <button class="menu-item" onclick="showTab('mqtt')"><i class="fas fa-wifi"></i><span>MQTT</span></button>
+                <button class="menu-item" onclick="showTab('history')"><i class="fas fa-history"></i><span>Historia</span></button>
+                <button class="menu-item" onclick="showTab('settings')"><i class="fas fa-cog"></i><span>Ustawienia</span></button>
             </div>
-            
             <div class="sidebar-footer">
-                <button class="btn-logout" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Wyloguj się</span>
-                </button>
-                <div class="user-info">
-                    <div class="user-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <div class="user-details">
-                        <span class="user-name" id="userName">Administrator</span>
-                        <span class="user-role">Super Admin</span>
-                    </div>
-                </div>
+                <button class="btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>Wyloguj się</span></button>
+                <div class="user-info"><div class="user-avatar"><i class="fas fa-user"></i></div><div><div class="user-name">Administrator</div><div class="user-role">System Monitor</div></div></div>
             </div>
         </nav>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Header -->
             <header class="main-header">
-                <div class="header-left">
-                    <h1 class="page-title" id="pageTitle">Dashboard Systemu</h1>
-                    <div class="breadcrumbs">
-                        <span class="breadcrumb-item active">Dashboard</span>
-                        <i class="fas fa-chevron-right"></i>
-                        <span class="breadcrumb-item">Podgląd na żywo</span>
-                    </div>
-                </div>
+                <div><h1 class="page-title" id="pageTitle">Dashboard Systemu</h1><div class="breadcrumbs"><span class="breadcrumb-item active">Dashboard</span><i class="fas fa-chevron-right"></i><span class="breadcrumb-item">Podgląd na żywo</span></div></div>
                 <div class="header-right">
-                    <div class="time-display" id="currentTime">
-                        <i class="far fa-clock"></i>
-                        <span id="clock">00:00:00</span>
-                    </div>
-                    <button class="btn-refresh" id="refreshBtn">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Aktualizuj</span>
-                    </button>
+                    <div class="time-display"><i class="far fa-clock"></i><span id="clock">00:00:00</span></div>
+                    <button class="btn-refresh" id="refreshBtn"><i class="fas fa-sync-alt"></i><span>Aktualizuj</span></button>
+                    <button class="btn-reset" id="resetEspBtn"><i class="fas fa-microchip"></i><span>Reset ESP32</span></button>
                 </div>
             </header>
 
-            <!-- Tabs Content -->
             <div class="content-wrapper">
-                <!-- Home Tab -->
                 <section id="home" class="tab-content active">
                     <div class="dashboard-grid">
-                        <!-- ODU Section -->
-                        <div class="card odu-card">
-                            <div class="card-header">
-                                <h2><i class="fas fa-snowflake"></i> Jednostka Zewnętrzna (ODU)</h2>
-                            </div>
-                            <div class="card-body">
-                                <div class="odu-grid" id="odu-tiles">
-                                    <!-- Tiles will be inserted here by JavaScript -->
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- IDU Section -->
-                        <div class="card idu-card">
-                            <div class="card-header">
-                                <h2><i class="fas fa-home"></i> Jednostka Wewnętrzna (IDU)</h2>
-                            </div>
-                            <div class="card-body">
-                                <div class="idu-grid" id="idu-tiles">
-                                    <!-- Tiles will be inserted here by JavaScript -->
-                                </div>
-                            </div>
-                        </div>
+                        <div class="card"><div class="card-header"><h2><i class="fas fa-snowflake"></i> Jednostka Zewnętrzna (ODU)</h2></div><div class="card-body"><div class="odu-grid" id="odu-tiles"></div></div></div>
+                        <div class="card"><div class="card-header"><h2><i class="fas fa-home"></i> Jednostka Wewnętrzna (IDU)</h2></div><div class="card-body"><div class="idu-grid" id="idu-tiles"></div></div></div>
                     </div>
                 </section>
 
-                <!-- Charts Tab -->
                 <section id="charts" class="tab-content">
                     <div class="charts-header">
-                        <div class="header-left">
-                            <h2><i class="fas fa-chart-line"></i> Wykresy Historyczne</h2>
-                            <p class="section-description">Analiza trendów i wydajności systemu w czasie</p>
-                        </div>
-                        <div class="header-right">
-                            <div class="time-range-selector">
-                                <label for="rangeSelect"><i class="fas fa-calendar-alt"></i> Zakres czasu:</label>
-                                <select id="rangeSelect" class="range-select">
-                                    <option value="300">5 minut</option>
-                                    <option value="1800">30 minut</option>
-                                    <option value="3600" selected>1 godzina</option>
-                                    <option value="21600">6 godzin</option>
-                                    <option value="43200">12 godzin</option>
-                                    <option value="86400">24 godziny</option>
-                                </select>
-                                <button class="btn-primary" id="applyRangeBtn">
-                                    <i class="fas fa-check"></i> Zastosuj
-                                </button>
-                            </div>
-                            <button class="btn-secondary" id="exportCharts">
-                                <i class="fas fa-download"></i> Eksportuj
-                            </button>
-                            <button class="btn-secondary" id="clearCharts">
-                                <i class="fas fa-trash-alt"></i> Wyczyść
-                            </button>
-                        </div>
+                        <div><h2><i class="fas fa-chart-line"></i> Wykresy Historyczne</h2><p class="section-description">Analiza trendów i wydajności systemu - kliknij na punkt wykresu aby zobaczyć wartość</p></div>
+                        <div><div style="display:flex;gap:12px;align-items:center"><label>Zakres czasu:</label><select id="rangeSelect" class="range-select"><option value="300">5 min</option><option value="1800">30 min</option><option value="3600" selected>1 godz</option><option value="21600">6 godz</option><option value="43200">12 godz</option><option value="86400">24 godz</option></select><button class="btn-primary" id="applyRangeBtn">Zastosuj</button></div></div>
                     </div>
-                    
-                    <!-- Globalna legenda - tylko jedna na stronie -->
-                    <div class="global-chart-legend">
-                        <h3><i class="fas fa-legend"></i> Legenda wykresów:</h3>
-                        <div class="legend-items">
-                            <span class="legend-item"><i class="fas fa-circle" style="color: #3b82f6;"></i> Temperatura pokojowa</span>
-                            <span class="legend-item"><i class="fas fa-circle" style="color: #10b981;"></i> Temperatura rury</span>
-                            <span class="legend-item"><i class="fas fa-circle" style="color: #f59e0b;"></i> Temperatura zadana</span>
-                            <span class="legend-item"><i class="fas fa-circle" style="color: #ef4444;"></i> Temperatura tłoczenia</span>
-                            <span class="legend-item"><i class="fas fa-circle" style="color: #8b5cf6;"></i> Temperatura modułu</span>
-                            <span class="legend-item"><i class="fas fa-circle" style="color: #06b6d4;"></i> Prędkość wentylatora</span>
-                        </div>
-                    </div>
-                    
+                    <div class="global-chart-legend"><h3><i class="fas fa-chart-simple"></i> Legenda wykresów</h3><div class="legend-items"><span class="legend-item"><i class="fas fa-circle" style="color:#3b82f6"></i> Temperatura pokojowa</span><span class="legend-item"><i class="fas fa-circle" style="color:#10b981"></i> Temperatura rury</span><span class="legend-item"><i class="fas fa-circle" style="color:#f59e0b"></i> Temperatura zadana</span><span class="legend-item"><i class="fas fa-circle" style="color:#ef4444"></i> Temperatura tłoczenia</span><span class="legend-item"><i class="fas fa-circle" style="color:#8b5cf6"></i> Temperatura modułu</span><span class="legend-item"><i class="fas fa-circle" style="color:#06b6d4"></i> Prędkość wentylatora</span><span class="legend-item"><i class="fas fa-circle" style="color:#f97316"></i> Temperatura zewnętrzna</span><span class="legend-item"><i class="fas fa-circle" style="color:#a855f7"></i> Temperatura wymiennika</span></div></div>
                     <div class="charts-grid">
-                        <div class="chart-container large">
-                            <div class="chart-header">
-                                <h3><i class="fas fa-temperature-low"></i> Temperatury IDU</h3>
-                            </div>
-                            <div class="chart-wrapper">
-                                <canvas id="chartIndoor"></canvas>
-                            </div>
-                        </div>
-                        
-                        <div class="chart-container large">
-                            <div class="chart-header">
-                                <h3><i class="fas fa-temperature-high"></i> Temperatury ODU</h3>
-                            </div>
-                            <div class="chart-wrapper">
-                                <canvas id="chartOutdoor"></canvas>
-                            </div>
-                        </div>
-                        
-                        <div class="chart-container">
-                            <div class="chart-header">
-                                <h3><i class="fas fa-bolt"></i> Prąd Kompresora</h3>
-                            </div>
-                            <div class="chart-wrapper">
-                                <canvas id="chartCurrent"></canvas>
-                            </div>
-                        </div>
-                        
-                        <div class="chart-container">
-                            <div class="chart-header">
-                                <h3><i class="fas fa-tachometer-alt"></i> Częstotliwość</h3>
-                            </div>
-                            <div class="chart-wrapper">
-                                <canvas id="chartCompressor"></canvas>
-                            </div>
-                        </div>
-                        
-                        <div class="chart-container">
-                            <div class="chart-header">
-                                <h3><i class="fas fa-fan"></i> Wentylator ODU</h3>
-                            </div>
-                            <div class="chart-wrapper">
-                                <canvas id="chartFanRpm"></canvas>
-                            </div>
-                        </div>
+                        <div class="chart-container large"><div class="chart-header"><h3><i class="fas fa-temperature-low"></i> Temperatury IDU</h3></div><div class="chart-wrapper"><canvas id="chartIndoor"></canvas></div></div>
+                        <div class="chart-container large"><div class="chart-header"><h3><i class="fas fa-temperature-high"></i> Temperatury ODU</h3></div><div class="chart-wrapper"><canvas id="chartOutdoor"></canvas></div></div>
+                        <div class="chart-container"><div class="chart-header"><h3><i class="fas fa-bolt"></i> Prąd Kompresora</h3></div><div class="chart-wrapper"><canvas id="chartCurrent"></canvas></div></div>
+                        <div class="chart-container"><div class="chart-header"><h3><i class="fas fa-tachometer-alt"></i> Częstotliwość Kompresora</h3></div><div class="chart-wrapper"><canvas id="chartCompressor"></canvas></div></div>
+                        <div class="chart-container"><div class="chart-header"><h3><i class="fas fa-fan"></i> Prędkość Wentylatora ODU</h3></div><div class="chart-wrapper"><canvas id="chartFanRpm"></canvas></div></div>
                     </div>
                 </section>
 
-                <!-- MQTT Tab -->
                 <section id="mqtt" class="tab-content">
                     <div class="mqtt-container">
-                        <div class="mqtt-header">
-                            <h2><i class="fas fa-wifi"></i> Konfiguracja Połączenia MQTT</h2>
-                            <p class="section-description">Skonfiguruj połączenie z brokerem MQTT do przesyłania danych z M5StickC</p>
-                        </div>
-                        
+                        <h2><i class="fas fa-wifi"></i> Konfiguracja Połączenia MQTT</h2>
+                        <p class="section-description">Połącz z brokerem MQTT do odbierania danych z ESP32</p>
                         <div class="mqtt-config-card">
-                            <div class="config-section">
-                                <h3><i class="fas fa-server"></i> Ustawienia Brokera</h3>
-                                <div class="form-group">
-                                    <label for="broker"><i class="fas fa-link"></i> Adres brokera</label>
-                                    <input type="text" id="broker" 
-                                           value="wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt"
-                                           placeholder="wss://adres.brokera:port/mqtt">
-                                    <div class="form-hint">
-                                        <i class="fas fa-info-circle"></i> Przykład: wss://broker:8884/mqtt lub mqtts://broker:8883
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="mqttUser"><i class="fas fa-user"></i> Login</label>
-                                        <input type="text" id="mqttUser" value="pawel22224" placeholder="Wprowadź login">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="mqttPass"><i class="fas fa-key"></i> Hasło</label>
-                                        <div class="password-wrapper">
-                                            <input type="password" id="mqttPass" value="Klocek12" placeholder="Wprowadź hasło">
-                                            <button type="button" class="password-toggle" id="mqttTogglePw">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-check">
-                                    <input type="checkbox" id="useTLS" checked>
-                                    <label for="useTLS">Użyj TLS/SSL</label>
-                                </div>
+                            <div class="config-section"><h3><i class="fas fa-server"></i> Ustawienia Brokera</h3>
+                                <div class="form-group"><label>Adres brokera</label><input type="text" id="broker" value="wss://772ebcf7129c4692affb3fc74ac5737f.s1.eu.hivemq.cloud:8884/mqtt"></div>
+                                <div class="form-row"><div class="form-group"><label>Login</label><input type="text" id="mqttUser" value=""></div><div class="form-group"><label>Hasło</label><div class="password-wrapper"><input type="password" id="mqttPass" value=""><button type="button" class="password-toggle" id="mqttTogglePw"><i class="fas fa-eye"></i></button></div></div></div>
+                                <div class="form-check"><input type="checkbox" id="useTLS" checked><label>Użyj TLS/SSL</label></div>
                             </div>
-                            
-                            <div class="config-section">
-                                <h3><i class="fas fa-sliders-h"></i> Opcje Połączenia</h3>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="clientId"><i class="fas fa-id-card"></i> ID Klienta</label>
-                                        <input type="text" id="clientId" value="M5StickC_Dashboard" placeholder="Unikalne ID klienta">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="port"><i class="fas fa-plug"></i> Port</label>
-                                        <select id="port" class="port-select">
-                                            <option value="8884">8884 (WSS)</option>
-                                            <option value="8883">8883 (MQTTS)</option>
-                                            <option value="443">443 (HTTPS)</option>
-                                            <option value="80">80 (HTTP)</option>
-                                            <option value="9001">9001 (WS)</option>
-                                            <option value="1883">1883 (MQTT)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="keepAlive"><i class="fas fa-heartbeat"></i> Keep Alive (s)</label>
-                                        <input type="number" id="keepAlive" value="60" min="10" max="300">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="protocol"><i class="fas fa-exchange-alt"></i> Protokół</label>
-                                        <select id="protocol" class="protocol-select">
-                                            <option value="wss">wss:// (WebSocket Secure)</option>
-                                            <option value="mqtts">mqtts:// (MQTT over TLS)</option>
-                                            <option value="ws">ws:// (WebSocket)</option>
-                                            <option value="mqtt">mqtt:// (MQTT)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-check">
-                                    <input type="checkbox" id="autoConnect" checked>
-                                    <label for="autoConnect">Automatyczne łączenie przy starcie</label>
-                                </div>
-                                <div class="form-check">
-                                    <input type="checkbox" id="saveSettings" checked>
-                                    <label for="saveSettings">Zapisz ustawienia w localStorage</label>
-                                </div>
+                            <div class="config-section"><h3><i class="fas fa-sliders-h"></i> Opcje Połączenia</h3>
+                                <div class="form-row"><div class="form-group"><label>ID Klienta</label><input type="text" id="clientId" value="RAC_Dashboard"></div><div class="form-group"><label>Port</label><select id="port" class="port-select"><option value="8884">8884 (WSS)</option><option value="8883">8883 (MQTTS)</option><option value="1883">1883 (MQTT)</option></select></div></div>
+                                <div class="form-row"><div class="form-group"><label>Keep Alive (s)</label><input type="number" id="keepAlive" value="60"></div><div class="form-group"><label>Protokół</label><select id="protocol" class="protocol-select"><option value="wss">wss://</option><option value="mqtts">mqtts://</option><option value="ws">ws://</option><option value="mqtt">mqtt://</option></select></div></div>
+                                <div class="form-check"><input type="checkbox" id="autoConnect" checked><label>Automatyczne łączenie przy starcie</label></div>
+                                <div class="form-check"><input type="checkbox" id="saveSettings" checked><label>Zapisz ustawienia w localStorage</label></div>
                             </div>
-                            
                             <div class="config-actions">
-                                <button class="btn-primary" id="btnConnect">
-                                    <i class="fas fa-plug"></i> Połącz z Brokerem
-                                </button>
-                                <button class="btn-secondary" id="btnDisconnect">
-                                    <i class="fas fa-plug"></i> Rozłącz
-                                </button>
-                                <button class="btn-secondary" id="btnTest">
-                                    <i class="fas fa-vial"></i> Wyślij Dane Testowe
-                                </button>
-                                <div class="status-display" id="mqttStatus">
-                                    <div class="status-indicator disconnected"></div>
-                                    <span class="status-text">Niepołączony</span>
-                                </div>
+                                <button class="btn-primary" id="btnConnect"><i class="fas fa-plug"></i> Połącz</button>
+                                <button class="btn-secondary" id="btnDisconnect"><i class="fas fa-plug"></i> Rozłącz</button>
+                                <button class="btn-secondary" id="resetSettings"><i class="fas fa-redo-alt"></i> Resetuj ustawienia</button>
+                                <div class="status-display" id="mqttStatus"><div class="status-indicator disconnected"></div><span>Niepołączony</span></div>
                             </div>
-                            
-                            <div class="config-hint">
-                                <i class="fas fa-info-circle"></i> Ustawienia zapisują się automatycznie. Double-click przycisku "Połącz" aby zresetować do domyślnych.
-                            </div>
+                            <div class="config-hint"><i class="fas fa-info-circle"></i> Ustawienia zapisują się automatycznie. Kliknij dwukrotnie "Połącz" aby zresetować.</div>
                         </div>
-                        
-                        <div class="mqtt-monitor">
-                            <div class="monitor-header">
-                                <h3><i class="fas fa-broadcast-tower"></i> Monitor Wiadomości</h3>
-                                <div class="monitor-stats">
-                                    <span class="stat"><i class="fas fa-envelope"></i> Wiadomości: <strong id="messageCount">0</strong></span>
-                                    <span class="stat"><i class="fas fa-topic"></i> Tematy: <strong id="topicCount">0</strong></span>
-                                </div>
-                            </div>
-                            <div class="monitor-body">
-                                <div class="message-list" id="mqttMessages">
-                                    <div class="empty-messages">
-                                        <i class="fas fa-comment-slash"></i>
-                                        <p>Brak wiadomości. Połącz się z brokerem, aby zobaczyć dane.</p>
-                                    </div>
-                                </div>
-                                <div class="monitor-controls">
-                                    <button class="btn-secondary" id="clearMessages">
-                                        <i class="fas fa-trash-alt"></i> Wyczyść log
-                                    </button>
-                                    <button class="btn-secondary" id="pauseMessages">
-                                        <i class="fas fa-pause"></i> Wstrzymaj
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <div class="mqtt-monitor"><div class="monitor-header"><h3><i class="fas fa-broadcast-tower"></i> Monitor Wiadomości</h3><div><span><i class="fas fa-envelope"></i> Wiadomości: <strong id="messageCount">0</strong></span><span style="margin-left:16px"><i class="fas fa-tag"></i> Tematy: <strong id="topicCount">0</strong></span></div></div><div class="monitor-body"><div class="message-list" id="mqttMessages"><div class="empty-messages" style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fas fa-comment-slash" style="font-size:2rem"></i><p>Brak wiadomości. Połącz się z brokerem.</p></div></div><div class="monitor-controls"><button class="btn-secondary" id="clearMessages">Wyczyść log</button><button class="btn-secondary" id="pauseMessages">Wstrzymaj</button></div></div></div>
                     </div>
                 </section>
 
-                <!-- History Tab -->
                 <section id="history" class="tab-content">
-                    <div class="history-header">
-                        <h2><i class="fas fa-history"></i> Historia Danych</h2>
-                        <p class="section-description">Przeglądaj historyczne dane z systemu klimatyzacji</p>
-                    </div>
+                    <div><h2><i class="fas fa-history"></i> Historia Danych</h2><p class="section-description">Pełna historia wszystkich odczytanych parametrów systemu</p></div>
                     <div class="history-container">
                         <div class="history-filters">
-                            <div class="filter-group">
-                                <label for="historyRange"><i class="fas fa-calendar"></i> Okres:</label>
-                                <select id="historyRange" class="filter-select">
-                                    <option value="1">Ostatnie 24 godziny</option>
-                                    <option value="7">Ostatnie 7 dni</option>
-                                    <option value="30">Ostatnie 30 dni</option>
-                                    <option value="90">Ostatnie 3 miesiące</option>
-                                </select>
-                            </div>
-                            <div class="filter-group">
-                                <label for="historyType"><i class="fas fa-filter"></i> Typ danych:</label>
-                                <select id="historyType" class="filter-select">
-                                    <option value="all">Wszystkie dane</option>
-                                    <option value="temperature">Temperatury</option>
-                                    <option value="power">Pobór mocy</option>
-                                    <option value="events">Zdarzenia</option>
-                                </select>
-                            </div>
-                            <button class="btn-primary" id="loadHistory">
-                                <i class="fas fa-search"></i> Pobierz dane
-                            </button>
+                            <div class="filter-group"><label>Okres czasu</label><select id="historyRange" class="filter-select"><option value="1">Ostatnie 24 godziny</option><option value="7">Ostatnie 7 dni</option><option value="30">Ostatnie 30 dni</option><option value="90">Ostatnie 3 miesiące</option><option value="0">Wszystkie dane</option></select></div>
+                            <div class="filter-group"><label>Liczba rekordów</label><select id="historyLimit" class="filter-select"><option value="50">50 ostatnich</option><option value="100" selected>100 ostatnich</option><option value="200">200 ostatnich</option><option value="500">500 ostatnich</option><option value="0">Wszystkie</option></select></div>
+                            <button class="btn-primary" id="loadHistory"><i class="fas fa-search"></i> Pobierz dane</button>
+                            <button class="btn-secondary" id="exportHistory"><i class="fas fa-download"></i> Eksportuj CSV</button>
+                            <button class="btn-secondary" id="clearHistory"><i class="fas fa-trash-alt"></i> Wyczyść historię</button>
                         </div>
                         <div class="history-table-container">
                             <table class="history-table">
                                 <thead>
                                     <tr>
-                                        <th>Data i czas</th>
-                                        <th>Temperatura pokojowa</th>
-                                        <th>Temperatura zewnętrzna</th>
-                                        <th>Pobór prądu</th>
-                                        <th>Tryb pracy</th>
-                                        <th>Status</th>
+                                        <th>Data</th><th>Godzina</th><th>Temp. pokojowa</th><th>Temp. zadana</th><th>Temp. rury</th><th>Temp. zewnętrzna</th><th>Temp. modułu</th><th>Temp. wymiennika</th><th>Temp. tłoczenia</th><th>Kompresor [Hz]</th><th>Prąd [A]</th><th>Wentylator ODU [rpm]</th><th>Wentylator IDU</th><th>Tryb pracy</th>
                                     </tr>
                                 </thead>
                                 <tbody id="historyTableBody">
-                                    <!-- History data will be inserted here -->
+                                    <tr><td colspan="14" style="text-align:center;padding:40px"><i class="fas fa-database"></i><p>Brak danych historycznych</p><p style="font-size:0.75rem">Połącz się z MQTT aby zbierać dane</p></td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- Settings Tab -->
                 <section id="settings" class="tab-content">
-                    <div class="settings-header">
-                        <h2><i class="fas fa-cog"></i> Ustawienia Aplikacji</h2>
-                        <p class="section-description">Dostosuj wygląd i zachowanie dashboardu</p>
-                    </div>
+                    <div><h2><i class="fas fa-cog"></i> Ustawienia Aplikacji</h2><p class="section-description">Dostosuj wygląd i zachowanie dashboardu</p></div>
                     <div class="settings-container">
-                        <div class="settings-sidebar">
-                            <nav class="settings-nav">
-                                <button class="settings-nav-item active" data-tab="general">
-                                    <i class="fas fa-sliders-h"></i> Ogólne
-                                </button>
-                                <button class="settings-nav-item" data-tab="appearance">
-                                    <i class="fas fa-palette"></i> Wygląd
-                                </button>
-                                <button class="settings-nav-item" data-tab="about">
-                                    <i class="fas fa-info-circle"></i> O aplikacji
-                                </button>
-                            </nav>
-                        </div>
+                        <div class="settings-sidebar"><nav class="settings-nav"><button class="settings-nav-item active" data-tab="general"><i class="fas fa-sliders-h"></i> Ogólne</button><button class="settings-nav-item" data-tab="appearance"><i class="fas fa-palette"></i> Wygląd</button><button class="settings-nav-item" data-tab="about"><i class="fas fa-info-circle"></i> O aplikacji</button></nav></div>
                         <div class="settings-content">
-                            <!-- General Settings -->
-                            <div class="settings-tab active" id="settingsGeneral">
-                                <h3><i class="fas fa-sliders-h"></i> Ustawienia Ogólne</h3>
-                                <div class="settings-group">
-                                    <div class="setting-item">
-                                        <label for="autoRefresh">Automatyczna aktualizacja</label>
-                                        <select id="autoRefresh" class="setting-select">
-                                            <option value="5">Co 5 sekund</option>
-                                            <option value="10" selected>Co 10 sekund</option>
-                                            <option value="30">Co 30 sekund</option>
-                                            <option value="60">Co 1 minutę</option>
-                                            <option value="0">Wyłączone</option>
-                                        </select>
-                                    </div>
-                                    <div class="setting-item">
-                                        <label for="temperatureUnit">Jednostka temperatury</label>
-                                        <select id="temperatureUnit" class="setting-select">
-                                            <option value="celsius">°C (Celsjusz)</option>
-                                            <option value="fahrenheit">°F (Fahrenheit)</option>
-                                        </select>
-                                    </div>
-                                    <div class="setting-item">
-                                        <label for="timeFormat">Format czasu</label>
-                                        <select id="timeFormat" class="setting-select">
-                                            <option value="24">24-godzinny</option>
-                                            <option value="12">12-godzinny</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Appearance Settings -->
-                            <div class="settings-tab" id="settingsAppearance">
-                                <h3><i class="fas fa-palette"></i> Ustawienia Wyglądu</h3>
-                                <div class="settings-group">
-                                    <div class="setting-item">
-                                        <label for="themeSelect">Motyw kolorystyczny</label>
-                                        <select id="themeSelect" class="setting-select">
-                                            <option value="dark">Ciemny</option>
-                                            <option value="light">Jasny</option>
-                                            <option value="auto">Auto</option>
-                                        </select>
-                                    </div>
-                                    <div class="setting-item">
-                                        <label for="tileLayout">Układ kafli</label>
-                                        <select id="tileLayout" class="setting-select">
-                                            <option value="grid">Siatka</option>
-                                            <option value="list">Lista</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="settings-actions">
-                                    <button class="btn-primary" id="saveAppearance">
-                                        <i class="fas fa-save"></i> Zapisz zmiany
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <!-- About Settings -->
-                            <div class="settings-tab" id="settingsAbout">
-                                <h3><i class="fas fa-info-circle"></i> O Aplikacji</h3>
-                                <div class="about-container">
-                                    <div class="about-logo">
-                                        <i class="fas fa-snowflake"></i>
-                                        <h4>M5StickC Dashboard</h4>
-                                    </div>
-                                    <div class="about-info">
-                                        <p><strong>Wersja:</strong> 2.0.0</p>
-                                        <p><strong>Autor:</strong> GREE Cloud Team</p>
-                                        <p><strong>Licencja:</strong> MIT</p>
-                                        <p><strong>Opis:</strong> Zaawansowany dashboard do monitorowania systemu klimatyzacji z M5StickC</p>
-                                    </div>
-                                    <div class="about-features">
-                                        <h5>Funkcje:</h5>
-                                        <ul>
-                                            <li>Monitorowanie w czasie rzeczywistym</li>
-                                            <li>Wykresy historyczne</li>
-                                            <li>Integracja MQTT</li>
-                                            <li>Responsywny design</li>
-                                            <li>Ciemny motyw</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
+                            <div class="settings-tab active" id="settingsGeneral"><h3>Ustawienia Ogólne</h3><div class="settings-group"><div class="setting-item"><label>Automatyczna aktualizacja</label><select id="autoRefresh" class="setting-select"><option value="0">Wyłączone</option><option value="5">Co 5 sekund</option><option value="10" selected>Co 10 sekund</option><option value="30">Co 30 sekund</option><option value="60">Co 1 minutę</option></select></div><div class="setting-item"><label>Jednostka temperatury</label><select id="temperatureUnit" class="setting-select"><option value="celsius">°C (Celsjusz)</option><option value="fahrenheit">°F (Fahrenheit)</option></select></div><div class="setting-item"><label>Format czasu</label><select id="timeFormat" class="setting-select"><option value="24">24-godzinny</option><option value="12">12-godzinny</option></select></div></div></div>
+                            <div class="settings-tab" id="settingsAppearance"><h3>Ustawienia Wyglądu</h3><div class="settings-group"><div class="setting-item"><label>Motyw kolorystyczny</label><select id="themeSelect" class="setting-select"><option value="dark">Ciemny</option><option value="light">Jasny</option><option value="auto">Auto (systemowy)</option></select></div><div class="setting-item"><label>Układ kafli</label><select id="tileLayout" class="setting-select"><option value="grid">Siatka</option><option value="list">Lista</option></select></div></div><div class="settings-actions"><button class="btn-primary" id="saveAppearance">Zapisz zmiany</button></div></div>
+                            <div class="settings-tab" id="settingsAbout"><div class="about-container"><div class="about-logo"><i class="fas fa-snowflake"></i><h4>RAC Monitor Dashboard</h4></div><div class="about-info"><p><strong>Wersja:</strong> 2.1.0</p><p><strong>Opis:</strong> Zaawansowany dashboard do monitorowania systemu klimatyzacji z ESP32</p></div><div class="about-features"><h5>Funkcje:</h5><ul style="list-style:none;padding-left:0"><li>✓ Monitorowanie w czasie rzeczywistym</li><li>✓ Wykresy z punktami interaktywnymi</li><li>✓ Integracja MQTT z automatycznym ponownym łączeniem</li><li>✓ Reset ESP32 przez MQTT i HTTP</li><li>✓ Eksport danych do CSV z pełną historią (14 kolumn)</li><li>✓ Responsywny design z ciemnym motywem</li></ul></div></div></div>
                         </div>
                     </div>
                 </section>
@@ -561,7 +994,8 @@
         </main>
     </div>
 
-    <!-- JavaScript Libraries -->
+    <div id="resetModal" class="modal"><div class="modal-content"><i class="fas fa-exclamation-triangle" style="font-size:3rem;color:#ef4444"></i><h3 style="margin-top:16px">Resetowanie ESP32</h3><p>Czy na pewno chcesz zrestartować moduł ESP32?</p><p style="font-size:0.8rem;color:var(--text-muted)">Urządzenie zostanie wyłączone i uruchomione ponownie.</p><div class="modal-buttons"><button class="btn-secondary" id="cancelReset">Anuluj</button><button class="btn-primary" id="confirmReset" style="background:#ef4444">Resetuj</button></div></div></div>
+
     <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="app.js"></script>
